@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "io.github.katpawlowa.twa",
-        "sha256_cert_fingerprints": ["D1:A7:5D:17:C7:5E:20:05:71:89:1A:93:A4:CA:A4:BC:A2:02:3B:74:03:AC:B0:92:6A:F7:29:18:E6:58:1D:3A"]
+        "sha256_cert_fingerprints": ["38:A2:D2:0B:92:8D:FB:34:8A:92:A6:E3:50:59:0D:DB:F6:FD:9A:D8:75:1D:82:4C:02:86:49:58:DB:50:80:CE"]
       }
     }]
