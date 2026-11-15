@@ -2421,6 +2421,30 @@
     }
   }
 
+ function getEffectiveWeeklyPace(profile, currentWeight = null) {
+    const startW = profile.startWeight || 92;
+    const startKcal = profile.startKcal || 1700;
+    const goalType = profile.goalType || 'lose';
+    const defaultPace = goalType === 'gain'
+      ? 0.35
+      : Math.max(0.45, Math.min(0.95, 0.65 * (1700 / Math.max(1200, startKcal))));
+
+    const latestW = currentWeight !== null
+      ? currentWeight
+      : (state.history?.length ? state.history[state.history.length - 1].weight : startW);
+    const startDateStr = profile.startDate || (state.history?.[0]?.date || getTodayStr());
+    const startDt = new Date(startDateStr + 'T12:00:00');
+    const nowDt = new Date(getTodayStr() + 'T12:00:00');
+    const daysElapsed = Math.max(0, Math.round((nowDt - startDt) / 86400000));
+
+    const actualChange = goalType === 'gain' ? (latestW - startW) : (startW - latestW);
+    if (daysElapsed >= 3 && actualChange > 0.2) {
+      const actualWeeklyPace = (actualChange / daysElapsed) * 7;
+      return Math.max(0.25, Math.min(2.5, actualWeeklyPace));
+    }
+    return defaultPace;
+  }
+
   function buildRoadmapStages(profile) {
     const startW = profile.startWeight || 92;
     const goalW = profile.goalWeight || 57;
@@ -2436,6 +2460,9 @@
 
     const startDateStr = profile.startDate || (state.history.length > 0 ? state.history[0].date : getTodayStr());
     const startDate = new Date(startDateStr + 'T12:00:00');
+    const nowDate = new Date(getTodayStr() + 'T12:00:00');
+    const latestW = state.history?.length ? state.history[state.history.length - 1].weight : startW;
+    const pace = getEffectiveWeeklyPace(profile, latestW);
     const months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
     const stages = [];
@@ -2453,11 +2480,27 @@
       const f = Math.round((kcal * fatShare) / 9);
       const c = Math.max(80, Math.round((kcal - p * 4 - f * 9) / 4));
 
-      const weekStart = Math.round(((Math.abs(wFrom - startW)) / 0.65));
-      const weekEnd = Math.round(((Math.abs(wTo - startW)) / 0.65));
-      const d1 = new Date(startDate); d1.setDate(d1.getDate() + weekStart * 7);
-      const d2 = new Date(startDate); d2.setDate(d2.getDate() + weekEnd * 7);
+      const remFromNowStart = isGain ? (wFrom - latestW) : (latestW - wFrom);
+      const remFromNowEnd = isGain ? (wTo - latestW) : (latestW - wTo);
 
+      let d1, d2;
+      if (remFromNowEnd <= 0) {
+        const w1 = Math.round((Math.abs(wFrom - startW) / pace));
+        const w2 = Math.round((Math.abs(wTo - startW) / pace));
+        d1 = new Date(startDate); d1.setDate(d1.getDate() + w1 * 7);
+        d2 = new Date(startDate); d2.setDate(d2.getDate() + w2 * 7);
+      } else if (remFromNowStart <= 0 && remFromNowEnd > 0) {
+        d1 = new Date(nowDate);
+        const weeksLeftStage = Math.ceil(remFromNowEnd / pace);
+        d2 = new Date(nowDate); d2.setDate(d2.getDate() + weeksLeftStage * 7);
+      } else {
+        const wStartFromNow = Math.floor(remFromNowStart / pace);
+        const wEndFromNow = Math.ceil(remFromNowEnd / pace);
+        d1 = new Date(nowDate); d1.setDate(d1.getDate() + wStartFromNow * 7);
+        d2 = new Date(nowDate); d2.setDate(d2.getDate() + wEndFromNow * 7);
+      }
+
+      const isDoneStage = remFromNowEnd <= 0;
       stages.push({
         index: i + 1,
         title: titles[i],
@@ -2467,7 +2510,9 @@
         p,
         f,
         c,
-        period: `${months[d1.getMonth()]} ${String(d1.getFullYear()).slice(-2)} – ${months[d2.getMonth()]} ${String(d2.getFullYear()).slice(-2)}`
+        period: isDoneStage
+          ? `✅ Пройден`
+          : `${months[d1.getMonth()]} ${String(d1.getFullYear()).slice(-2)} – ${months[d2.getMonth()]} ${String(d2.getFullYear()).slice(-2)}`
       });
     }
     return stages;
@@ -2490,8 +2535,15 @@
   }
 
   function calcEtaInfo(currentWeight, goalWeight, startKcal, startDateStr = null, startWeight = null, goalType = 'lose') {
-    const left = Math.abs(currentWeight - goalWeight);
-    const paceFactor = goalType === 'gain' ? 0.35 : Math.max(0.45, Math.min(0.95, 0.65 * (1700 / Math.max(1200, startKcal || 1700))));
+    const left = goalType === 'gain' ? Math.max(0, goalWeight - currentWeight) : Math.max(0, currentWeight - goalWeight);
+    const tempProfile = {
+      ...(state.profile || {}),
+      startWeight: startWeight || state.profile?.startWeight || currentWeight,
+      startKcal: startKcal || state.profile?.startKcal || 1700,
+      startDate: startDateStr || state.profile?.startDate || getTodayStr(),
+      goalType
+    };
+    const paceFactor = getEffectiveWeeklyPace(tempProfile, currentWeight);
     const weeksLeft = Math.ceil(left / paceFactor);
     const baseDate = (startDateStr && startWeight && Math.abs(currentWeight - startWeight) < 0.05)
       ? new Date(startDateStr + 'T12:00:00')
@@ -4149,8 +4201,11 @@
   }
 
   function renderSummaryDonuts() {
-    const keys = Object.keys(state.dailyLogs).sort();
-    const totalDays = Math.max(1, keys.length);
+    const startDateStr = state.profile.startDate || (state.history[0]?.date || getTodayStr());
+    const startDt = new Date(startDateStr + 'T12:00:00');
+    const todayDt = new Date(getTodayStr() + 'T12:00:00');
+    const diffDays = Math.max(0, Math.round((todayDt - startDt) / 86400000));
+    const totalDays = diffDays + 1;
     const weekW = getWeeklyWorkoutsCount();
 
     let successDays = 0;
@@ -4158,26 +4213,30 @@
     let nutAnsweredDays = 0;
     let streak = 0;
 
-    keys.forEach(k => {
+    for (let i = 0; i < totalDays; i++) {
+      const d = new Date(startDt);
+      d.setDate(startDt.getDate() + i);
+      const k = formatLocalDate(d);
       const log = state.dailyLogs[k];
-      if (getDayScoreForDate(k, log, weekW) >= 3) {
+
+      if (log && getDayScoreForDate(k, log, weekW) >= 3) {
         successDays++;
         streak++;
       } else {
         streak = 0;
       }
-      if (log.nutrition !== null) {
+      if (log && log.nutrition !== null && log.nutrition !== undefined) {
         nutAnsweredDays++;
         if (log.nutrition === true) nutYesDays++;
       }
-    });
+    }
 
-    const overallPct = Math.round((successDays / totalDays) * 100);
+    const overallPct = Math.round((successDays / Math.max(1, totalDays)) * 100);
     const nutPct = nutAnsweredDays ? Math.round((nutYesDays / nutAnsweredDays) * 100) : 0;
     const workPct = Math.min(100, Math.round((weekW / Math.max(1, state.profile.workoutGoal)) * 100));
 
     document.getElementById('overallSuccessBadge').textContent = `${overallPct}% успеха`;
-    document.getElementById('anTotalDays').textContent = keys.length || 1;
+    document.getElementById('anTotalDays').textContent = totalDays;
     document.getElementById('anSuccessDays').textContent = successDays;
     document.getElementById('anStreakDays').textContent = streak;
 
