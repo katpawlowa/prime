@@ -1,7 +1,7 @@
 {
   "name": "Прайм — Персональный трекер",
   "short_name": "Прайм",
-  "description": "Персональный трекер похудения с индивидуальным расчетом КБЖУ, меню 80/20, трекером привычек и адвент-календарем целей",
+  "description": "Персональный трекер прогресса с индивидуальным расчетом КБЖУ, умным меню и трекером привычек",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#fff5f8",
@@ -9,7 +9,7 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "app-icon.png",
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
