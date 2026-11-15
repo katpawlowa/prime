@@ -15,7 +15,7 @@
       "purpose": "any"
     },
     {
-      "src": "empty-splash.png",
+      "src": "app-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
