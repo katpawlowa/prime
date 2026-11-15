@@ -924,11 +924,11 @@
           <div style="font-size:1rem; font-weight:900; color:var(--primary);" id="energyEatenVal">0 ккал</div>
         </div>
         <div style="border-left:1px solid var(--border); border-right:1px solid var(--border);">
-          <div style="font-size:0.7rem; color:var(--muted); font-weight:700;">🔥 Потрачено (спорт)</div>
+          <div style="font-size:0.7rem; color:var(--muted); font-weight:700;" id="energyBurnedLabel">🔥 Расход (база+акт.)</div>
           <div style="font-size:1rem; font-weight:900; color:var(--success);" id="energyBurnedVal">0 ккал</div>
         </div>
         <div>
-          <div style="font-size:0.7rem; color:var(--muted); font-weight:700;">⚖️ Чистый баланс</div>
+          <div style="font-size:0.7rem; color:var(--muted); font-weight:700;" id="energyNetLabel">⚖️ Итог дня</div>
           <div style="font-size:1rem; font-weight:900; color:var(--primary-deep);" id="energyNetVal">0 ккал</div>
         </div>
       </div>
@@ -4622,19 +4622,52 @@ function renderSportAndEnergyBalance(sumEatenKcal) {
   updateSportBurnPreview();
   const todayLog = ensureTodayLog();
   const sLogs = todayLog.sportLogs || [];
+
+  // 1. Расчет базового расхода организма (BMR * бытовая активность 1.2)
+  const p = state.profile || {};
+  const latest = state.history?.[state.history.length - 1] || { weight: p.startWeight || 70 };
+  const w = latest.weight || 70;
+  const h = p.height || 167;
+  const age = p.age || 25;
+  const genderOffset = p.gender === 'male' ? 5 : -161;
+  const bmr = Math.round(10 * w + 6.25 * h - 5 * age + genderOffset);
+  const baseBodyBurn = Math.round(bmr * 1.2); // Расход тела в покое и быту
+
+  // 2. Расход на шаги и спорт за сегодня
   const stepBurn = Math.round((todayLog.steps || 0) * 0.04);
   const sportBurn = sLogs.reduce((acc, x) => acc + (x.kcal || 0), 0);
-  const totalBurn = sportBurn + stepBurn;
+  const totalBodyBurn = baseBodyBurn + stepBurn + sportBurn;
+
+  // 3. Чистый баланс (Съедено минус Полный расход организма)
+  const netBalance = sumEatenKcal - totalBodyBurn;
+  const sign = netBalance > 0 ? '+' : '';
 
   const eatenEl = document.getElementById('energyEatenVal') || document.getElementById(' energyEatenVal');
   const burnedEl = document.getElementById('energyBurnedVal');
   const netEl = document.getElementById('energyNetVal');
+  const netLbl = document.getElementById('energyNetLabel');
+
   if (eatenEl) eatenEl.textContent = `${sumEatenKcal} ккал`;
-  if (burnedEl) burnedEl.textContent = `${totalBurn} ккал`;
-  if (netEl) netEl.textContent = `${sumEatenKcal - totalBurn} ккал`;
+  if (burnedEl) {
+    burnedEl.textContent = `${totalBodyBurn} ккал`;
+    burnedEl.title = `База организма: ${baseBodyBurn} ккал + Шаги: ${stepBurn} ккал + Спорт: ${sportBurn} ккал`;
+  }
+  if (netEl) {
+    netEl.textContent = `${sign}${netBalance} ккал`;
+    const isGain = p.goalType === 'gain';
+    const isGood = isGain ? (netBalance >= 0) : (netBalance <= 0);
+    netEl.style.color = isGood ? 'var(--success)' : 'var(--warn)';
+  }
+  if (netLbl) {
+    if (p.goalType === 'gain') {
+      netLbl.textContent = netBalance >= 0 ? '⚖️ Профицит' : '⚖️ Дефицит';
+    } else {
+      netLbl.textContent = netBalance <= 0 ? '⚖️ Дефицит дня' : '⚖️ Профицит дня';
+    }
+  }
 
   const badge = document.getElementById('sportBurnedBadge');
-  if (badge) badge.textContent = `Потрачено: ${sportBurn} ккал (+${stepBurn} за шаги)`;
+  if (badge) badge.textContent = `Спорт: ${sportBurn} ккал • Всего с организмом: ${totalBodyBurn} ккал`;
 
   const box = document.getElementById('sportLogsContainer');
   if (box) {
