@@ -3343,24 +3343,24 @@ invalidateProductsCache();
     updatePortionPreview();
 
     try {
-      const url = existingFbKey
-        ? `${FIREBASE_DB_URL}/shared_products/${existingFbKey}.json`
-        : `${FIREBASE_DB_URL}/shared_products.json`;
-      const method = existingFbKey ? 'PUT' : 'POST';
+      const targetKey = existingFbKey || ('prod_' + Date.now() + '_' + Math.floor(Math.random() * 1000));
+      const url = `${FIREBASE_DB_URL}/shared_products/${targetKey}.json`;
 
       const res = await fetch(url, {
-        method,
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       if (res.ok) {
         await syncSharedProducts(false);
         showAppAlert('Успешно', existingFbKey ? `Продукт «${name}» исправлен и перевыгружен в облако!` : `Продукт «${name}» добавлен в облачную базу!`);
+      } else {
+        const errText = await res.text();
+        showAppAlert('Ошибка облака (' + res.status + ')', 'Firebase отклонил перезапись. Проверь вкладку Rules в Firebase! Ответ: ' + errText);
       }
     } catch (e) {
-      showAppAlert('Сохранено', 'Сохранено локально и синхронизируется при появлении сети.');
+      showAppAlert('Сохранено локально', 'Нет связи с сервером Firebase, изменения сохранены только на этом устройстве.');
     }
-  }
 
   async function deleteSharedProductFromCloud() {
     if (!editingProductTarget || !editingProductTarget.firebaseKey) return;
