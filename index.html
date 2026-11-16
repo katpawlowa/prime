@@ -968,7 +968,7 @@
           <select id="foodMealSlotSelect" style="min-height:38px; padding:7px 10px; font-weight:700;"></select>
         </div>
 
-        <input type="text" id="foodSearchInput" placeholder="Поиск продукта (курица, творог, гречка, банан...)" oninput="renderProductSearchResults()" />
+        <input type="text" id="foodSearchInput" placeholder="Поиск продукта (курица, творог, гречка, банан...)" oninput="debouncedProductSearch()" />
         <div class="food-search-results" id="foodSearchResults"></div>
 
         <div class="row" style="margin-top:8px;">
@@ -2315,10 +2315,10 @@ let collapsedMealSlots = {};
         return;
       }
     }
-    appStore.activeUserId = uid;
-    state = appStore.users[uid];
-    state.sharedProducts = appStore.sharedProducts || [];
-    saveState();
+appStore.activeUserId = uid;
+ state = appStore.users[uid];
+ state.sharedProducts = appStore.sharedProducts || [];
+ saveState();
     closeAccountsModal();
     renderAll();
   }
@@ -2991,10 +2991,12 @@ let collapsedMealSlots = {};
     renderCalorieTracker(currentStage);
     renderWorkoutPresetDetails();
     renderSavings();
-    renderHeatmap();
+   renderHeatmap();
     renderPhotoDiary();
     renderAdvent();
-    renderAllCharts();
+    if (document.getElementById('tab-analytics')?.classList.contains('active')) {
+      renderAllCharts();
+    }
     if (!state.currentMenu || state.currentMenu.length === 0) {
       generateMenu(1, false);
     } else {
@@ -3085,26 +3087,34 @@ let collapsedMealSlots = {};
     }
     updatePortionPreview();
   }
+let cachedMergedProducts = null;
+
+  function invalidateProductsCache() {
+    cachedMergedProducts = null;
+  }
 
   function getAllProductsList() {
+    if (cachedMergedProducts) return cachedMergedProducts;
     const shared = Array.isArray(appStore.sharedProducts) ? appStore.sharedProducts : [];
     const map = new Map();
-    DEFAULT_PRODUCTS_DB.forEach(p => map.set(p.id, { ...p, isBuiltIn: true }));
+    const builtInByName = new Map();
+    DEFAULT_PRODUCTS_DB.forEach(p => {
+      map.set(p.id, { ...p, isBuiltIn: true });
+      builtInByName.set(p.name.toLowerCase(), p.id);
+    });
     shared.forEach(p => {
       if (p && p.name) {
         if (p.overridesId && map.has(p.overridesId)) {
           map.set(p.overridesId, { ...p, firebaseKey: p.id, isCloud: true });
         } else {
-          for (const [k, v] of map.entries()) {
-            if (v.name.toLowerCase() === p.name.toLowerCase() && v.isBuiltIn) {
-              map.delete(k);
-            }
-          }
+          const dupKey = builtInByName.get(p.name.toLowerCase());
+          if (dupKey) map.delete(dupKey);
           map.set(p.id, { ...p, firebaseKey: p.id, isCloud: true });
         }
       }
     });
-    return Array.from(map.values());
+    cachedMergedProducts = Array.from(map.values());
+    return cachedMergedProducts;
   }
 
 let offSearchTimer = null;
@@ -3189,9 +3199,8 @@ let offSearchTimer = null;
     if (!appStore.sharedProducts) appStore.sharedProducts = [];
     appStore.sharedProducts.unshift({ id: safeKey, firebaseKey: safeKey, ...cleanProd });
     state.sharedProducts = appStore.sharedProducts;
-    prod.isExternalOFF = false;
-    prod.firebaseKey = safeKey;
-    saveState();
+ invalidateProductsCache();
+ saveState();
     try {
       await fetch(`${FIREBASE_DB_URL}/shared_products/${safeKey}.json`, {
         method: 'PUT',
@@ -3213,6 +3222,8 @@ let offSearchTimer = null;
           if (data[key] && data[key].name) loaded.push({ id: key, firebaseKey: key, ...data[key] });
         });
       }
+invalidateProductsCache();
+      appStore.sharedProducts = loaded;
       appStore.sharedProducts = loaded;
       state.sharedProducts = loaded;
       saveState();
@@ -3323,6 +3334,8 @@ let offSearchTimer = null;
     }
 
     state.sharedProducts = appStore.sharedProducts;
+invalidateProductsCache();
+      appStore.sharedProducts = loaded;
     saveState();
     closeProductModal();
     syncUnitSelectorForProduct(selectedProductObj);
@@ -3379,6 +3392,12 @@ let offSearchTimer = null;
       adder.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       document.getElementById('foodSearchInput')?.focus();
     }
+  }
+
+let searchInputDebounceTimer = null;
+  function debouncedProductSearch() {
+    clearTimeout(searchInputDebounceTimer);
+    searchInputDebounceTimer = setTimeout(renderProductSearchResults, 180);
   }
 
   function renderProductSearchResults() {
