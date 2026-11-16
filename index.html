@@ -3334,8 +3334,7 @@ invalidateProductsCache();
     }
 
     state.sharedProducts = appStore.sharedProducts;
-invalidateProductsCache();
-      appStore.sharedProducts = loaded;
+    invalidateProductsCache();
     saveState();
     closeProductModal();
     syncUnitSelectorForProduct(selectedProductObj);
@@ -3353,14 +3352,15 @@ invalidateProductsCache();
       });
       if (res.ok) {
         await syncSharedProducts(false);
-        showAppAlert('Успешно', existingFbKey ? `Продукт «${name}» исправлен и перевыгружен в облако!` : `Продукт «${name}» добавлен в облачную базу!`);
+        showAppAlert('Успешно', `✅ Продукт «${name}» сохранён и перезаписан в облаке!`);
       } else {
         const errText = await res.text();
-        showAppAlert('Ошибка облака (' + res.status + ')', 'Firebase отклонил перезапись. Проверь вкладку Rules в Firebase! Ответ: ' + errText);
+        showAppAlert('Ошибка Firebase (' + res.status + ')', 'База отклонила запись. Проверь вкладку Rules в Firebase! Ответ: ' + errText);
       }
     } catch (e) {
-      showAppAlert('Сохранено локально', 'Нет связи с сервером Firebase, изменения сохранены только на этом устройстве.');
+      showAppAlert('Сохранено локально', 'Изменения сохранены на устройстве (ошибка сети: ' + e.message + ').');
     }
+  }
 
   async function deleteSharedProductFromCloud() {
     if (!editingProductTarget || !editingProductTarget.firebaseKey) return;
