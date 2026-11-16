@@ -3386,8 +3386,7 @@ let offSearchTimer = null;
     if (!listEl) return;
     const q = (document.getElementById('foodSearchInput')?.value || '').toLowerCase().trim();
 
-    triggerOpenFoodFactsSearch(q);
-
+    // triggerOpenFoodFactsSearch(q);
     const all = getAllProductsList();
     const countEl = document.getElementById('productsTotalCount');
     if (countEl) countEl.textContent = all.length;
