@@ -3093,6 +3093,99 @@
     return Array.from(map.values());
   }
 
+let offSearchTimer = null;
+  let offRemoteResults = [];
+  let isOffSearching = false;
+  let lastOffQuery = '';
+
+  function triggerOpenFoodFactsSearch(query) {
+    const q = (query || '').trim();
+    clearTimeout(offSearchTimer);
+    if (q.length < 3) {
+      offRemoteResults = [];
+      isOffSearching = false;
+      return;
+    }
+    if (q === lastOffQuery) return;
+
+    offSearchTimer = setTimeout(async () => {
+      lastOffQuery = q;
+      isOffSearching = true;
+      renderProductSearchResults();
+      try {
+        const url = `https://ru.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=12&fields=product_name,product_name_ru,brands,nutriments,serving_quantity`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('OFF API error');
+        const data = await res.json();
+        const products = Array.isArray(data.products) ? data.products : [];
+
+        offRemoteResults = products
+          .map((p, idx) => {
+            const rawName = (p.product_name_ru || p.product_name || '').trim();
+            if (!rawName) return null;
+            const brand = (p.brands || '').split(',')[0].trim();
+            const fullName = brand && !rawName.toLowerCase().includes(brand.toLowerCase())
+              ? `${rawName} (${brand})`
+              : rawName;
+
+            const n = p.nutriments || {};
+            const kcal = Math.round(parseFloat(n['energy-kcal_100g'] || n['energy-kcal'] || 0));
+            const prot = +(parseFloat(n.proteins_100g || n.proteins || 0)).toFixed(1);
+            const fat = +(parseFloat(n.fat_100g || n.fat || 0)).toFixed(1);
+            const carb = +(parseFloat(n.carbohydrates_100g || n.carbohydrates || 0)).toFixed(1);
+
+            if (!kcal && !prot && !fat && !carb) return null;
+            const portionGrams = parseInt(p.serving_quantity, 10) || null;
+
+            return {
+              id: `off_${Date.now()}_${idx}`,
+              name: fullName,
+              kcal,
+              p: prot,
+              f: fat,
+              c: carb,
+              portionGrams: (portionGrams && portionGrams > 0 && portionGrams <= 1000) ? portionGrams : null,
+              author: 'Open Food Facts',
+              isExternalOFF: true
+            };
+          })
+          .filter(Boolean);
+      } catch (e) {
+        offRemoteResults = [];
+      } finally {
+        isOffSearching = false;
+        renderProductSearchResults();
+      }
+    }, 450);
+  }
+
+  async function saveExternalProductToFirebase(prod) {
+    if (!prod || !prod.isExternalOFF || typeof FIREBASE_DB_URL === 'undefined') return;
+    const cleanProd = {
+      name: prod.name,
+      kcal: prod.kcal,
+      p: prod.p,
+      f: prod.f,
+      c: prod.c,
+      portionGrams: prod.portionGrams || null,
+      author: 'База OFF',
+      updatedAt: getTodayStr()
+    };
+    const safeKey = 'off_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    if (!appStore.sharedProducts) appStore.sharedProducts = [];
+    appStore.sharedProducts.unshift({ id: safeKey, firebaseKey: safeKey, ...cleanProd });
+    state.sharedProducts = appStore.sharedProducts;
+    prod.isExternalOFF = false;
+    prod.firebaseKey = safeKey;
+    saveState();
+    try {
+      await fetch(`${FIREBASE_DB_URL}/shared_products/${safeKey}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanProd)
+      });
+    } catch (e) {}
+  }
   async function syncSharedProducts(showAlert = false) {
     const badge = document.getElementById('cloudSyncBadge');
     if (badge) badge.textContent = '☁️ Синхронизация...';
@@ -3278,13 +3371,22 @@
     const listEl = document.getElementById('foodSearchResults');
     if (!listEl) return;
     const q = (document.getElementById('foodSearchInput')?.value || '').toLowerCase().trim();
+
+    triggerOpenFoodFactsSearch(q);
+
     const all = getAllProductsList();
     const countEl = document.getElementById('productsTotalCount');
     if (countEl) countEl.textContent = all.length;
 
-    const filtered = q ? all.filter(x => x.name.toLowerCase().includes(q)) : all.slice(0, 15);
+    const localFiltered = q ? all.filter(x => x.name.toLowerCase().includes(q)) : all.slice(0, 15);
+    const localNames = new Set(localFiltered.map(x => x.name.toLowerCase()));
+    const extraOff = q.length >= 3
+      ? offRemoteResults.filter(o => !localNames.has(o.name.toLowerCase()))
+      : [];
+    const filtered = [...localFiltered, ...extraOff];
+
     listEl.innerHTML = '';
-    if (filtered.length === 0) {
+    if (filtered.length === 0 && !isOffSearching) {
       listEl.innerHTML = `<div style="padding:10px; font-size:0.78rem; color:var(--muted); text-align:center;">Ничего не найдено. Нажми <strong>«+ Новый продукт»</strong> выше!</div>`;
       return;
     }
@@ -3295,8 +3397,9 @@
       const portionInfo = prod.portionGrams
         ? ` • 1 порц. (${prod.portionGrams} г) = ${Math.round(prod.kcal * prod.portionGrams / 100)} ккал`
         : '';
+      const sourceTag = prod.isExternalOFF ? ` <span style="color:var(--primary); font-size:0.68rem; font-weight:700;">🌐 OFF</span>` : '';
       row.innerHTML = `
-        <span style="flex:1; padding-right:6px;">${prod.name} <span style="color:var(--muted); font-size:0.7rem;">${prod.portionGrams ? `(${prod.portionGrams} г/порц.)` : ''}</span></span>
+        <span style="flex:1; padding-right:6px;">${prod.name}${sourceTag} <span style="color:var(--muted); font-size:0.7rem;">${prod.portionGrams ? `(${prod.portionGrams} г/порц.)` : ''}</span></span>
         <div class="row" style="gap:6px; flex-wrap:nowrap;">
           <span style="color:var(--muted); font-size:0.72rem; white-space:nowrap;">${prod.kcal} ккал/100г${portionInfo}</span>
           <button class="btn-soft" style="padding:2px 6px; min-height:24px; font-size:0.7rem;" title="Редактировать продукт">✏️</button>
@@ -3316,6 +3419,13 @@
       };
       listEl.appendChild(row);
     });
+
+    if (isOffSearching) {
+      const loaderDiv = document.createElement('div');
+      loaderDiv.style.cssText = 'padding:8px; font-size:0.75rem; color:var(--muted); text-align:center;';
+      loaderDiv.textContent = '🌐 Ищем в базе Open Food Facts...';
+      listEl.appendChild(loaderDiv);
+    }
     updatePortionPreview();
   }
 
@@ -3394,6 +3504,9 @@
 
   function addSelectedProductToLog() {
     if (!selectedProductObj) return;
+    if (selectedProductObj.isExternalOFF) {
+      saveExternalProductToFirebase(selectedProductObj);
+    }
     const { grams, portionLabel } = getSelectedFoodGramsAndLabel();
     if (!grams || grams <= 0) {
       showAppAlert('Внимание', 'Укажите количество граммов или порций!');
@@ -4687,6 +4800,9 @@ function saveCurrentSelectionAsFavPortion() {
   if (!selectedProductObj) {
     showAppAlert('Внимание', 'Сначала выбери продукт из списка!');
     return;
+  }
+  if (selectedProductObj.isExternalOFF) {
+    saveExternalProductToFirebase(selectedProductObj);
   }
   const { grams, portionLabel } = getSelectedFoodGramsAndLabel();
   if (!grams || grams <= 0) {
