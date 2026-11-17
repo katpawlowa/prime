@@ -964,28 +964,10 @@
           </div>
         </div>
 
-        <div class="field" style="margin-bottom:6px;">
-          <select id="foodMealSlotSelect" style="min-height:38px; padding:7px 10px; font-weight:700;"></select>
-        </div>
-
-        <input type="text" id="foodSearchInput" placeholder="Поиск продукта (курица, творог, гречка, банан...)" oninput="debouncedProductSearch()" />
-        <div class="food-search-results" id="foodSearchResults"></div>
-
-        <div class="row" style="margin-top:8px;">
-          <div style="flex:1; min-width:120px;">
-            <div style="display:flex; align-items:center; gap:5px;">
-              <span style="font-size:0.74rem; color:var(--text); font-weight:800;" id="selectedProductLabel">Выбери продукт выше</span>
-              <button class="btn-soft" style="padding:2px 6px; min-height:22px; font-size:0.68rem;" onclick="openEditSelectedProduct()" title="Редактировать КБЖУ продукта">✏️ Изменить</button>
-            </div>
-            <div style="font-size:0.74rem; font-weight:800; color:var(--primary); margin-top:2px;" id="portionPreviewText">0 ккал • Б 0 / Ж 0 / У 0</div>
-          </div>
-          <select id="foodUnitSelect" style="width:135px; min-height:42px; padding:6px 8px; font-size:0.8rem; font-weight:700;" onchange="onFoodUnitChange()">
-           <option value="grams">В граммах (г)</option>
-          </select>
-          <input type="number" id="foodGramsInput" value="100" min="0.5" max="3000" step="any" style="width:82px;" oninput="updatePortionPreview()" placeholder="Кол-во" />
-          <button class="btn" onclick="addSelectedProductToLog()">+ Добавить</button>
-          <button class="btn-soft" onclick="saveCurrentSelectionAsFavPortion()" title="Сохранить этот продукт с выбранным весом в избранное">⭐ В избранное</button>
-        </div>
+        <div class="field" style="margin-bottom:8px;">
+       <select id="foodMealSlotSelect" style="min-height:40px; padding:7px 10px; font-weight:700;"></select>
+     </div>
+     <button class="btn" style="width:100%; font-size:0.95rem;" onclick="openProductPickerModal()">🔍 Выбрать продукт из базы и добавить</button>
 
         <!-- Панель быстрых избранных порций -->
      <div id="favPortionsWrapper" style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); display:none;">
@@ -1161,27 +1143,34 @@
       </div>
       <div class="kg-bubbles" id="kgBubbles"></div>
     </div>
-    <!-- Overall Donut -->
+    <!-- Overall Donut with Period Switcher -->
     <div class="card">
       <div class="card-title">
-        <span>🏆 Общая диаграмма успешных дней</span>
+        <span>🏆 Прогресс и норма калорий</span>
         <span class="badge" id="overallSuccessBadge">0% успеха</span>
       </div>
+      <div class="row" style="margin-bottom:10px; gap:6px;">
+        <button class="btn-soft" id="btnPeriodDay" style="flex:1;" onclick="setAnalyticsPeriod('day')">За день</button>
+        <button class="btn-soft" id="btnPeriodWeek" style="flex:1;" onclick="setAnalyticsPeriod('week')">За неделю</button>
+        <button class="btn-soft" id="btnPeriodMonth" style="flex:1;" onclick="setAnalyticsPeriod('month')">За месяц</button>
+      </div>
       <canvas id="overallDonutChart"></canvas>
-      <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-top:10px; margin-bottom:0;">
+      <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-top:10px; margin-bottom:10px;">
         <div class="stat-box">
-          <div class="stat-label">Всего дней</div>
+          <div class="stat-label" id="anTotalLabel">Всего дней</div>
           <div class="stat-val" id="anTotalDays">1</div>
         </div>
         <div class="stat-box">
-          <div class="stat-label">Успешных</div>
+          <div class="stat-label">В норме КБЖУ</div>
           <div class="stat-val" style="color:var(--success);" id="anSuccessDays">0</div>
         </div>
         <div class="stat-box">
-          <div class="stat-label">Подряд</div>
+          <div class="stat-label">Подряд в норме</div>
           <div class="stat-val" id="anStreakDays">0</div>
         </div>
       </div>
+      <div style="font-size:0.76rem; font-weight:800; color:var(--primary-deep); margin-bottom:6px;">🔥 Соблюдение нормы калорий по дням:</div>
+      <div id="kcalComplianceStrip" style="display:flex; flex-wrap:wrap; gap:5px;"></div>
     </div>
 
     <!-- Monthly Discipline Calendar -->
@@ -1758,10 +1747,20 @@
         <input type="number" id="crC" placeholder="45" />
       </div>
     </div>
-    <div class="field">
-      <label>Ингредиенты (через запятую):</label>
-      <input type="text" id="crIng" placeholder="Творог 150 г, яйцо 1 шт..." />
-    </div>
+    <div style="background:var(--surface); border:1.5px solid var(--border); border-radius:14px; padding:10px; margin-bottom:10px;">
+   <label style="display:block; font-size:0.76rem; font-weight:800; color:var(--primary-deep); margin-bottom:6px;">🍎 Собрать рецепт из базы продуктов (авторасчет КБЖУ):</label>
+   <input type="text" id="crProdSearch" placeholder="Поиск продукта для рецепта..." oninput="renderCrProductSearch()" style="margin-bottom:6px;" />
+   <div id="crProdResults" style="max-height:115px; overflow-y:auto; border:1px solid var(--border); border-radius:10px; background:var(--card); margin-bottom:6px;"></div>
+   <div class="row" style="gap:6px;">
+     <input type="number" id="crProdGrams" value="100" min="1" max="3000" style="width:85px;" placeholder="Граммы" />
+     <button type="button" class="btn-soft" style="flex:1;" onclick="addIngredientToCustomRecipe()">+ Добавить в рецепт</button>
+   </div>
+   <div id="crAddedIngList" style="margin-top:6px;"></div>
+ </div>
+ <div class="field">
+   <label>Ингредиенты текстом (заполняется само или вручную):</label>
+   <input type="text" id="crIng" placeholder="Творог 150 г, яйцо 1 шт..." />
+ </div>
     <div class="field">
       <label>Краткий рецепт:</label>
       <textarea id="crSteps" rows="2" placeholder="Как готовить..."></textarea>
@@ -1877,6 +1876,72 @@
       <input type="text" id="adventCustomInput" />
     </div>
     <button class="btn" style="width:100%;" onclick="saveCustomAdvent()">Сохранить награду</button>
+  </div>
+</div>
+
+<!-- EDIT LOGGED FOOD MODAL -->
+<div class="modal-backdrop" id="editLoggedFoodModal">
+  <div class="modal">
+    <div class="card-title">
+      <span>✏️ Изменить добавленный продукт</span>
+      <button class="btn-soft" onclick="closeEditLoggedFoodModal()">✕</button>
+    </div>
+    <div style="font-weight:800; font-size:0.92rem; color:var(--primary-deep); margin-bottom:10px;" id="elfNameTitle">Продукт</div>
+    <div class="field">
+      <label>Прием пищи:</label>
+      <select id="elfMealSlot"></select>
+    </div>
+    <div class="row" style="margin-bottom:8px;">
+      <div class="field" style="flex:1; margin-bottom:0;">
+        <label>Единица измерения:</label>
+        <select id="elfUnitSelect" onchange="onElfUnitChange()">
+          <option value="grams">В граммах (г / мл)</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1; margin-bottom:0;">
+        <label>Количество:</label>
+        <input type="number" id="elfQtyInput" min="0.1" max="5000" step="any" oninput="updateEditLoggedFoodPreview()" />
+      </div>
+    </div>
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px; text-align:center; font-weight:800; color:var(--primary); font-size:0.86rem; margin-bottom:12px;" id="elfPreviewText">
+      0 ккал • Б 0 / Ж 0 / У 0
+    </div>
+    <button class="btn" style="width:100%;" onclick="saveEditedLoggedFood()">Сохранить изменения</button>
+  </div>
+</div>
+
+<!-- LARGE PRODUCT PICKER MODAL (Крупное окно выбора продуктов) -->
+<div class="modal-backdrop" id="productPickerModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="card-title">
+      <span>🍎 Выбор продукта (<span id="ppmTotalCount">40</span>)</span>
+      <button class="btn-soft" onclick="closeProductPickerModal()">✕</button>
+    </div>
+    <div class="row" style="margin-bottom:8px;">
+      <select id="ppmMealSlotSelect" style="flex:1; font-weight:700;" onchange="activeMealSlotKey = this.value;"></select>
+      <button class="btn-soft" onclick="syncSharedProducts(true)" title="Обновить из облака">🔄</button>
+      <button class="btn-soft" onclick="openProductModal()">+ Новый</button>
+    </div>
+    <input type="text" id="ppmSearchInput" placeholder="🔍 Введи название продукта..." style="font-size:1rem; min-height:46px; margin-bottom:8px;" oninput="debouncedPpmSearch()" />
+    <div id="ppmSearchResults" style="max-height:240px; overflow-y:auto; border:1.5px solid var(--border); border-radius:14px; background:var(--surface); margin-bottom:10px;"></div>
+
+    <div style="background:var(--surface); border:1.5px solid var(--border); border-radius:14px; padding:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px;">
+        <span style="font-size:0.86rem; font-weight:800; color:var(--primary-deep);" id="ppmSelectedLabel">Выбери продукт выше</span>
+        <button class="btn-soft" style="padding:3px 8px; min-height:26px; font-size:0.74rem;" onclick="openEditSelectedProduct()">✏️ Изменить в базе</button>
+      </div>
+      <div class="row" style="margin-bottom:8px;">
+        <select id="ppmUnitSelect" style="flex:1; font-weight:700;" onchange="onPpmUnitChange()">
+          <option value="grams">В граммах (г / мл)</option>
+        </select>
+        <input type="number" id="ppmGramsInput" value="100" min="0.5" max="3000" step="any" style="width:95px; font-size:1rem; font-weight:800;" oninput="updatePpmPreview()" />
+      </div>
+      <div style="font-size:0.84rem; font-weight:800; color:var(--primary); margin-bottom:8px;" id="ppmPreviewText">0 ккал • Б 0 / Ж 0 / У 0</div>
+      <div class="row" style="gap:6px;">
+        <button class="btn" style="flex:2;" onclick="addSelectedProductFromModal()">+ Добавить в прием пищи</button>
+        <button class="btn-soft" style="flex:1;" onclick="savePpmSelectionAsFavPortion()">⭐ В избранное</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -4354,50 +4419,102 @@ let searchInputDebounceTimer = null;
     ctx.fillText(centerLabel, cx, cy);
   }
 
-  function renderSummaryDonuts() {
-    const startDateStr = state.profile.startDate || (state.history[0]?.date || getTodayStr());
-    const startDt = new Date(startDateStr + 'T12:00:00');
-    const todayDt = new Date(getTodayStr() + 'T12:00:00');
-    const diffDays = Math.max(0, Math.round((todayDt - startDt) / 86400000));
-    const totalDays = diffDays + 1;
-    const weekW = getWeeklyWorkoutsCount();
+  let analyticsPeriodMode = 'month';
 
-    let successDays = 0;
-    let nutYesDays = 0;
-    let nutAnsweredDays = 0;
-    let streak = 0;
+function setAnalyticsPeriod(mode) {
+ analyticsPeriodMode = mode;
+ renderSummaryDonuts();
+}
 
-    for (let i = 0; i < totalDays; i++) {
-      const d = new Date(startDt);
-      d.setDate(startDt.getDate() + i);
-      const k = formatLocalDate(d);
-      const log = state.dailyLogs[k];
+function isDayKcalInNorm(log, targetKcal, goalType) {
+ if (!log) return null;
+ const foods = log.foods || [];
+ if (foods.length > 0) {
+   const sumK = foods.reduce((s, x) => s + (x.kcal || 0), 0);
+   if (goalType === 'gain') return sumK >= targetKcal * 0.90 && sumK <= targetKcal * 1.25;
+   return sumK >= targetKcal * 0.70 && sumK <= targetKcal * 1.10;
+ }
+ if (log.nutrition === true) return true;
+ if (log.nutrition === false) return false;
+ return null;
+}
 
-      if (log && getDayScoreForDate(k, log, weekW) >= 3) {
-        successDays++;
-        streak++;
-      } else {
-        streak = 0;
-      }
-      if (log && log.nutrition !== null && log.nutrition !== undefined) {
-        nutAnsweredDays++;
-        if (log.nutrition === true) nutYesDays++;
-      }
-    }
+function renderSummaryDonuts() {
+ ['day', 'week', 'month'].forEach(m => {
+   const b = document.getElementById('btnPeriod' + m[0].toUpperCase() + m.slice(1));
+   if (b) {
+     b.style.background = analyticsPeriodMode === m ? 'var(--primary)' : '';
+     b.style.color = analyticsPeriodMode === m ? '#fff' : '';
+   }
+ });
 
-    const overallPct = Math.round((successDays / Math.max(1, totalDays)) * 100);
-    const nutPct = nutAnsweredDays ? Math.round((nutYesDays / nutAnsweredDays) * 100) : 0;
-    const workPct = Math.min(100, Math.round((weekW / Math.max(1, state.profile.workoutGoal)) * 100));
+ const latest = state.history[state.history.length - 1] || { weight: state.profile.startWeight };
+ const stagePlan = getCurrentDynamicPlan(latest.weight, state.profile);
+ const targetK = stagePlan.kcal;
+ const goalType = state.profile.goalType || 'lose';
 
-    document.getElementById('overallSuccessBadge').textContent = `${overallPct}% успеха`;
-    document.getElementById('anTotalDays').textContent = totalDays;
-    document.getElementById('anSuccessDays').textContent = successDays;
-    document.getElementById('anStreakDays').textContent = streak;
+ const todayDt = new Date(getTodayStr() + 'T12:00:00');
+ const startDateStr = state.profile.startDate || (state.history[0]?.date || getTodayStr());
+ const profileStartDt = new Date(startDateStr + 'T12:00:00');
 
-    drawDonut('overallDonutChart', overallPct, `${overallPct}%`);
-    drawDonut('nutritionDonutChart', nutPct, `${nutPct}%`);
-    drawDonut('workoutDonutChart', workPct, `${weekW}/${state.profile.workoutGoal}`);
-  }
+ let periodDays = 30;
+ if (analyticsPeriodMode === 'day') periodDays = 1;
+ else if (analyticsPeriodMode === 'week') periodDays = 7;
+ else {
+   const diffFromStart = Math.max(1, Math.round((todayDt - profileStartDt) / 86400000) + 1);
+   periodDays = Math.min(30, diffFromStart);
+ }
+
+ const weekW = getWeeklyWorkoutsCount();
+ let inNormDays = 0;
+ let nutYesDays = 0;
+ let nutAnsweredDays = 0;
+ let streak = 0;
+ const stripHtml = [];
+
+ for (let i = periodDays - 1; i >= 0; i--) {
+   const d = new Date(todayDt);
+   d.setDate(todayDt.getDate() - i);
+   const k = formatLocalDate(d);
+   const log = state.dailyLogs[k];
+   const normStatus = isDayKcalInNorm(log, targetK, goalType);
+   const sumK = (log?.foods || []).reduce((s, x) => s + (x.kcal || 0), 0);
+
+   if (normStatus === true) {
+     inNormDays++;
+     streak++;
+   } else {
+     streak = 0;
+   }
+
+   if (normStatus !== null) {
+     nutAnsweredDays++;
+     if (normStatus === true) nutYesDays++;
+   }
+
+   const dayNum = String(d.getDate()).padStart(2, '0');
+   const bg = normStatus === true ? 'var(--success)' : (normStatus === false ? 'var(--danger)' : 'var(--surface-2)');
+   const col = normStatus !== null ? '#fff' : 'var(--muted)';
+   const titleInfo = sumK > 0 ? `${k}: ${sumK} / ${targetK} ккал` : `${k}: ${normStatus === true ? 'В норме' : (normStatus === false ? 'Не в норме' : 'Нет данных')}`;
+   stripHtml.push(`<div title="${titleInfo}" style="padding:4px 7px; border-radius:8px; font-size:0.7rem; font-weight:800; background:${bg}; color:${col};">${dayNum}</div>`);
+ }
+
+ const overallPct = Math.round((inNormDays / Math.max(1, periodDays)) * 100);
+ const nutPct = nutAnsweredDays ? Math.round((nutYesDays / nutAnsweredDays) * 100) : 0;
+ const workPct = Math.min(100, Math.round((weekW / Math.max(1, state.profile.workoutGoal)) * 100));
+
+ document.getElementById('overallSuccessBadge').textContent = `${overallPct}% в норме`;
+ document.getElementById('anTotalDays').textContent = periodDays;
+ document.getElementById('anSuccessDays').textContent = inNormDays;
+ document.getElementById('anStreakDays').textContent = streak;
+
+ const stripEl = document.getElementById('kcalComplianceStrip');
+ if (stripEl) stripEl.innerHTML = stripHtml.join('');
+
+ drawDonut('overallDonutChart', overallPct, `${overallPct}%`);
+ drawDonut('nutritionDonutChart', nutPct, `${nutPct}%`);
+ drawDonut('workoutDonutChart', workPct, `${weekW}/${state.profile.workoutGoal}`);
+}
 
   function switchTab(tabId, btn) {
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
@@ -4613,7 +4730,14 @@ function scaleMealObj(m, scale) {
     renderMenuAndShopping();
   }
 
-  function openCustomRecipeModal() { document.getElementById('customRecipeModal').classList.add('open'); }
+  function openCustomRecipeModal() {
+    crAddedIngredients = [];
+    crSelectedProd = null;
+    if (document.getElementById('crProdSearch')) document.getElementById('crProdSearch').value = '';
+    renderCrProductSearch();
+    recalcCustomRecipeFromIngredients();
+    document.getElementById('customRecipeModal').classList.add('open');
+  }
   function closeCustomRecipeModal() { document.getElementById('customRecipeModal').classList.remove('open'); }
 
   function saveCustomRecipe() {
@@ -4932,6 +5056,312 @@ list.innerHTML = favs.map((f, i) => `
  </div>
 `).join('');
 }
+
+// --- КРУПНОЕ ОКНО ВЫБОРА ПРОДУКТОВ ---
+  let ppmDebounceTimer = null;
+  function debouncedPpmSearch() {
+    clearTimeout(ppmDebounceTimer);
+    ppmDebounceTimer = setTimeout(renderPpmSearchResults, 160);
+  }
+
+  function openProductPickerModal() {
+    const slots = MEAL_DEFINITIONS[state.profile.mealsPerDay || 4] || MEAL_DEFINITIONS[4];
+    const ppmSlot = document.getElementById('ppmMealSlotSelect');
+    if (ppmSlot) {
+      ppmSlot.innerHTML = slots.map(s => `<option value="${s.key}" ${s.key === activeMealSlotKey ? 'selected' : ''}>В: ${s.label}</option>`).join('');
+    }
+    const inp = document.getElementById('ppmSearchInput');
+    if (inp) inp.value = '';
+    syncPpmUnitSelector(selectedProductObj);
+    renderPpmSearchResults();
+    document.getElementById('productPickerModal').classList.add('open');
+    setTimeout(() => inp?.focus(), 60);
+  }
+
+  function closeProductPickerModal() {
+    document.getElementById('productPickerModal').classList.remove('open');
+  }
+
+  function syncPpmUnitSelector(prod) {
+    const unitSel = document.getElementById('ppmUnitSelect');
+    const valInput = document.getElementById('ppmGramsInput');
+    if (!unitSel || !valInput || !prod) return;
+    const pGrams = parseFloat(prod.portionGrams);
+    if (pGrams && pGrams > 0) {
+      unitSel.innerHTML = `<option value="grams">В граммах (г)</option><option value="portion">Порция (${pGrams} г)</option>`;
+      unitSel.value = 'portion';
+      valInput.value = 1;
+    } else {
+      unitSel.innerHTML = `<option value="grams">В граммах (г)</option>`;
+      unitSel.value = 'grams';
+      valInput.value = 100;
+    }
+    updatePpmPreview();
+  }
+
+  function onPpmUnitChange() {
+    const unitSel = document.getElementById('ppmUnitSelect');
+    const valInput = document.getElementById('ppmGramsInput');
+    if (!unitSel || !valInput) return;
+    valInput.value = unitSel.value === 'portion' ? 1 : 100;
+    updatePpmPreview();
+  }
+
+  function getPpmGramsAndLabel() {
+    const rawVal = parseFloat(document.getElementById('ppmGramsInput')?.value) || 0;
+    const unitMode = document.getElementById('ppmUnitSelect')?.value || 'grams';
+    const pGrams = parseFloat(selectedProductObj?.portionGrams) || 0;
+    if (unitMode === 'portion' && pGrams > 0) {
+      const totalGrams = Math.round(rawVal * pGrams);
+      return { grams: totalGrams, portionLabel: `${rawVal} порц. (${totalGrams} г)` };
+    }
+    return { grams: Math.round(rawVal), portionLabel: `${Math.round(rawVal)} г` };
+  }
+
+  function updatePpmPreview() {
+    const lbl = document.getElementById('ppmSelectedLabel');
+    const prev = document.getElementById('ppmPreviewText');
+    if (!selectedProductObj || !lbl || !prev) return;
+    const { grams, portionLabel } = getPpmGramsAndLabel();
+    lbl.textContent = selectedProductObj.name;
+    const r = grams / 100;
+    prev.textContent = `${portionLabel}: ${Math.round(selectedProductObj.kcal * r)} ккал • Б ${(selectedProductObj.p * r).toFixed(1)} / Ж ${(selectedProductObj.f * r).toFixed(1)} / У ${(selectedProductObj.c * r).toFixed(1)}`;
+  }
+
+  function renderPpmSearchResults() {
+    const listEl = document.getElementById('ppmSearchResults');
+    if (!listEl) return;
+    const q = (document.getElementById('ppmSearchInput')?.value || '').toLowerCase().trim();
+    const all = getAllProductsList();
+    const cnt = document.getElementById('ppmTotalCount');
+    if (cnt) cnt.textContent = all.length;
+
+    const filtered = q ? all.filter(x => x.name.toLowerCase().includes(q)) : all.slice(0, 20);
+    listEl.innerHTML = '';
+    if (filtered.length === 0) {
+      listEl.innerHTML = `<div style="padding:14px; font-size:0.85rem; color:var(--muted); text-align:center;">Ничего не найдено. Нажми «+ Новый» сверху!</div>`;
+      return;
+    }
+    filtered.slice(0, 30).forEach(prod => {
+      const row = document.createElement('div');
+      const isSel = selectedProductObj && selectedProductObj.name === prod.name;
+      row.style.cssText = `padding:11px 12px; border-bottom:1px solid var(--border); cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:0.88rem; ${isSel ? 'background:var(--surface-2); font-weight:800;' : ''}`;
+      row.innerHTML = `
+        <span style="flex:1; padding-right:8px;">${prod.name}</span>
+        <span style="color:var(--primary); font-weight:700; white-space:nowrap;">${prod.kcal} ккал</span>
+      `;
+      row.onclick = () => {
+        selectedProductObj = prod;
+        syncPpmUnitSelector(prod);
+        renderPpmSearchResults();
+      };
+      listEl.appendChild(row);
+    });
+    updatePpmPreview();
+  }
+
+  function addSelectedProductFromModal() {
+    if (!selectedProductObj) return;
+    const { grams, portionLabel } = getPpmGramsAndLabel();
+    if (!grams || grams <= 0) {
+      showAppAlert('Внимание', 'Укажи количество граммов или порций!');
+      return;
+    }
+    const slotKey = document.getElementById('ppmMealSlotSelect')?.value || activeMealSlotKey;
+    const r = grams / 100;
+    logFoodEntry(selectedProductObj.name, grams, selectedProductObj.kcal * r, selectedProductObj.p * r, selectedProductObj.f * r, selectedProductObj.c * r, slotKey, portionLabel);
+    closeProductPickerModal();
+  }
+
+  function savePpmSelectionAsFavPortion() {
+    if (!selectedProductObj) return;
+    const { grams, portionLabel } = getPpmGramsAndLabel();
+    if (!grams || grams <= 0) return;
+    const r = grams / 100;
+    if (!state.favoritePortions) state.favoritePortions = [];
+    state.favoritePortions.push({
+      id: 'favp_' + Date.now(),
+      name: selectedProductObj.name,
+      grams,
+      portionText: portionLabel,
+      kcal: Math.round(selectedProductObj.kcal * r),
+      p: +(selectedProductObj.p * r).toFixed(1),
+      f: +(selectedProductObj.f * r).toFixed(1),
+      c: +(selectedProductObj.c * r).toFixed(1)
+    });
+    saveState();
+    renderFavPortions();
+    showAppAlert('В избранном ⭐', `«${selectedProductObj.name} (${portionLabel})» сохранено в избранные порции!`);
+  }
+
+  // --- РЕДАКТИРОВАНИЕ ДОБАВЛЕННОГО В ПРИЁМ ПИЩИ ПРОДУКТА ---
+  let editingLoggedFoodIdx = null;
+  let editingLoggedFoodBase100 = null;
+  let editingLoggedFoodPortionGrams = null;
+
+  function openEditLoggedFoodModal(globalIdx) {
+    const todayLog = ensureTodayLog();
+    const item = todayLog.foods?.[globalIdx];
+    if (!item) return;
+
+    editingLoggedFoodIdx = globalIdx;
+    document.getElementById('elfNameTitle').textContent = item.name;
+
+    const slots = MEAL_DEFINITIONS[state.profile.mealsPerDay || 4] || MEAL_DEFINITIONS[4];
+    const slotSel = document.getElementById('elfMealSlot');
+    slotSel.innerHTML = slots.map(s => `<option value="${s.key}" ${s.key === item.meal ? 'selected' : ''}>${s.label}</option>`).join('');
+
+    const dbProd = getAllProductsList().find(x => x.name.toLowerCase() === item.name.toLowerCase());
+    if (dbProd) {
+      editingLoggedFoodBase100 = { kcal: dbProd.kcal, p: dbProd.p, f: dbProd.f, c: dbProd.c };
+      editingLoggedFoodPortionGrams = parseFloat(dbProd.portionGrams) || null;
+    } else if (item.grams && item.grams > 0) {
+      const k = 100 / item.grams;
+      editingLoggedFoodBase100 = { kcal: item.kcal * k, p: item.p * k, f: item.f * k, c: item.c * k };
+      editingLoggedFoodPortionGrams = null;
+    } else {
+      editingLoggedFoodBase100 = { kcal: item.kcal, p: item.p, f: item.f, c: item.c };
+      editingLoggedFoodPortionGrams = 100;
+    }
+
+    const unitSel = document.getElementById('elfUnitSelect');
+    const qtyInp = document.getElementById('elfQtyInput');
+    if (editingLoggedFoodPortionGrams && editingLoggedFoodPortionGrams > 0) {
+      unitSel.innerHTML = `<option value="grams">В граммах (г)</option><option value="portion">Порция (${editingLoggedFoodPortionGrams} г)</option>`;
+      if (item.portionText && item.portionText.includes('порц.')) {
+        unitSel.value = 'portion';
+        qtyInp.value = parseFloat(item.portionText) || 1;
+      } else {
+        unitSel.value = 'grams';
+        qtyInp.value = item.grams || 100;
+      }
+    } else {
+      unitSel.innerHTML = `<option value="grams">В граммах (г)</option>`;
+      unitSel.value = 'grams';
+      qtyInp.value = item.grams || 100;
+    }
+
+    updateEditLoggedFoodPreview();
+    document.getElementById('editLoggedFoodModal').classList.add('open');
+  }
+
+  function closeEditLoggedFoodModal() {
+    editingLoggedFoodIdx = null;
+    document.getElementById('editLoggedFoodModal').classList.remove('open');
+  }
+
+  function onElfUnitChange() {
+    const unitSel = document.getElementById('elfUnitSelect');
+    const qtyInp = document.getElementById('elfQtyInput');
+    qtyInp.value = unitSel.value === 'portion' ? 1 : 100;
+    updateEditLoggedFoodPreview();
+  }
+
+  function getElfGramsAndLabel() {
+    const val = parseFloat(document.getElementById('elfQtyInput')?.value) || 0;
+    const mode = document.getElementById('elfUnitSelect')?.value || 'grams';
+    if (mode === 'portion' && editingLoggedFoodPortionGrams > 0) {
+      const g = Math.round(val * editingLoggedFoodPortionGrams);
+      return { grams: g, portionText: `${val} порц. (${g} г)` };
+    }
+    return { grams: Math.round(val), portionText: `${Math.round(val)} г` };
+  }
+
+  function updateEditLoggedFoodPreview() {
+    if (!editingLoggedFoodBase100) return;
+    const { grams, portionText } = getElfGramsAndLabel();
+    const r = grams / 100;
+    document.getElementById('elfPreviewText').textContent = `${portionText}: ${Math.round(editingLoggedFoodBase100.kcal * r)} ккал • Б ${(editingLoggedFoodBase100.p * r).toFixed(1)} / Ж ${(editingLoggedFoodBase100.f * r).toFixed(1)} / У ${(editingLoggedFoodBase100.c * r).toFixed(1)}`;
+  }
+
+  function saveEditedLoggedFood() {
+    if (editingLoggedFoodIdx === null || !editingLoggedFoodBase100) return;
+    const todayLog = ensureTodayLog();
+    const item = todayLog.foods?.[editingLoggedFoodIdx];
+    if (!item) return;
+
+    const { grams, portionText } = getElfGramsAndLabel();
+    if (!grams || grams <= 0) {
+      showAppAlert('Ошибка', 'Укажите корректное количество!');
+      return;
+    }
+    const r = grams / 100;
+    item.meal = document.getElementById('elfMealSlot').value || item.meal;
+    item.grams = grams;
+    item.portionText = portionText;
+    item.kcal = Math.round(editingLoggedFoodBase100.kcal * r);
+    item.p = +(editingLoggedFoodBase100.p * r).toFixed(1);
+    item.f = +(editingLoggedFoodBase100.f * r).toFixed(1);
+    item.c = +(editingLoggedFoodBase100.c * r).toFixed(1);
+
+    saveState();
+    closeEditLoggedFoodModal();
+    renderAll();
+  }
+
+  // --- ВЫБОР ПРОДУКТОВ ИЗ БАЗЫ В КОНСТРУКТОРЕ РЕЦЕПТОВ ---
+  let crSelectedProd = null;
+  let crAddedIngredients = [];
+
+  function renderCrProductSearch() {
+    const box = document.getElementById('crProdResults');
+    if (!box) return;
+    const q = (document.getElementById('crProdSearch')?.value || '').toLowerCase().trim();
+    const all = getAllProductsList();
+    const list = q ? all.filter(x => x.name.toLowerCase().includes(q)) : all.slice(0, 10);
+    box.innerHTML = list.slice(0, 15).map(p => {
+      const sel = crSelectedProd && crSelectedProd.name === p.name;
+      return `<div style="padding:6px 9px; border-bottom:1px solid var(--border); font-size:0.78rem; cursor:pointer; display:flex; justify-content:space-between; ${sel ? 'background:var(--surface-2); font-weight:800;' : ''}" onclick="selectCrProduct('${p.name.replace(/'/g, "\\'")}')"><span>${p.name}</span><span>${p.kcal} ккал</span></div>`;
+    }).join('');
+  }
+
+  function selectCrProduct(name) {
+    crSelectedProd = getAllProductsList().find(x => x.name === name) || null;
+    renderCrProductSearch();
+  }
+
+  function addIngredientToCustomRecipe() {
+    if (!crSelectedProd) {
+      showAppAlert('Внимание', 'Сначала выбери продукт из списка выше!');
+      return;
+    }
+    const g = parseFloat(document.getElementById('crProdGrams')?.value) || 100;
+    const r = g / 100;
+    crAddedIngredients.push({
+      name: crSelectedProd.name,
+      grams: Math.round(g),
+      kcal: crSelectedProd.kcal * r,
+      p: crSelectedProd.p * r,
+      f: crSelectedProd.f * r,
+      c: crSelectedProd.c * r
+    });
+    recalcCustomRecipeFromIngredients();
+  }
+
+  function removeIngredientFromCustomRecipe(idx) {
+    crAddedIngredients.splice(idx, 1);
+    recalcCustomRecipeFromIngredients();
+  }
+
+  function recalcCustomRecipeFromIngredients() {
+    const listEl = document.getElementById('crAddedIngList');
+    if (listEl) {
+      listEl.innerHTML = crAddedIngredients.map((it, idx) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; padding:4px 6px; background:var(--card); border-radius:8px; margin-top:4px;">
+          <span>${it.name} — ${it.grams} г (${Math.round(it.kcal)} ккал)</span>
+          <button type="button" class="btn-soft" style="padding:1px 6px; min-height:22px;" onclick="removeIngredientFromCustomRecipe(${idx})">✕</button>
+        </div>
+      `).join('');
+    }
+    if (crAddedIngredients.length > 0) {
+      document.getElementById('crIng').value = crAddedIngredients.map(x => `${x.name} — ${x.grams} г`).join(', ');
+      document.getElementById('crKcal').value = Math.round(crAddedIngredients.reduce((s, x) => s + x.kcal, 0));
+      document.getElementById('crP').value = Math.round(crAddedIngredients.reduce((s, x) => s + x.p, 0));
+      document.getElementById('crF').value = Math.round(crAddedIngredients.reduce((s, x) => s + x.f, 0));
+      document.getElementById('crC').value = Math.round(crAddedIngredients.reduce((s, x) => s + x.c, 0));
+    }
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
     renderAll();
     syncSharedProducts(false);
