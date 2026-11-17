@@ -1027,10 +1027,10 @@
       </div>
 
       <div class="field" style="margin-top:12px;">
-        <label>🥗 Соблюдение питания и калоража сегодня:</label>
+        <label>🔥 Режим учета питания (влияет на цели дня и календарь):</label>
         <div class="yn-group">
-          <button type="button" class="yn-btn" id="btnNutYes" onclick="setNutritionToday(true)">✅ Да, соблюдаю</button>
-          <button type="button" class="yn-btn" id="btnNutNo" onclick="setNutritionToday(false)">❌ Нет, был срыв</button>
+          <button type="button" class="yn-btn" id="btnCountCalYes" onclick="setTrackCaloriesMode(true)">📊 Считаю калории</button>
+          <button type="button" class="yn-btn" id="btnCountCalNo" onclick="setTrackCaloriesMode(false)">🚫 Не считаю</button>
         </div>
       </div>
 
@@ -1184,7 +1184,7 @@
         </div>
       </div>
       <p style="font-size:0.75rem; color:var(--muted); margin-bottom:6px;">
-        Чем насыщеннее цвет дня, тем больше целей (от 1 до 4) выполнено в эту дату.
+        Чем насыщеннее цвет дня, тем больше целей (вода, еда, шаги) выполнено. ⭐ — была тренировка.
       </p>
       <div class="heatmap-grid" style="margin-bottom:4px; text-align:center; font-size:0.68rem; font-weight:800; color:var(--muted);">
         <div>Пн</div><div>Вт</div><div>Ср</div><div>Чт</div><div>Пт</div><div>Сб</div><div>Вс</div>
@@ -2243,6 +2243,7 @@
         gender: 'female',
         pin: '',
         mealsPerDay: 4,
+        trackCalories: true,
         birthDate: '',
         startDate: '',
         goalType: 'lose',
@@ -2844,32 +2845,68 @@ appStore.activeUserId = uid;
 
   function getWeeklyWorkoutsCount() {
     const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Вс, 1 = Пн ... 6 = Сб
+    const diffToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diffToMonday);
+
     let count = 0;
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
+    for (let i = 0; i <= diffToMonday; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
       const key = formatLocalDate(d);
       if (state.dailyLogs[key]?.workout) count++;
     }
     return count;
   }
 
-  function getDayScoreForDate(dateStr, log, weeklyWorkouts) {
-    if (!log) return 0;
-    let stepGoal = state.profile.stepGoal || 8000;
-    let waterGoal = state.profile.waterGoal || 8;
-    let workoutGoal = state.profile.workoutGoal || 3;
+  function isDayTrackCalories(log) {
+    if (log && typeof log.trackCalories === 'boolean') return log.trackCalories;
+    return state.profile.trackCalories !== false;
+  }
+
+  function isNutritionGoalMetForDate(dateStr, log) {
+    if (!log) return false;
+    const foods = log.foods || [];
+    if (foods.length > 0) {
+      const sumK = foods.reduce((s, x) => s + (x.kcal || 0), 0);
+      const wEntry = [...(state.history || [])].reverse().find(h => h.date <= dateStr) || state.history?.[0] || { weight: state.profile.startWeight || 70 };
+      const stage = getCurrentDynamicPlan(wEntry.weight, state.profile);
+      return sumK <= stage.kcal;
+    }
+    return log.nutrition === true;
+  }
+
+  function getDayScoreDetails(dateStr, log) {
+    const trackCal = isDayTrackCalories(log);
+    const maxScore = trackCal ? 3 : 2;
+    if (!log) return { score: 0, maxScore, trackCal };
+
+    const stepGoal = state.profile.stepGoal || 8000;
+    const waterGoal = state.profile.waterGoal || 8;
 
     let score = 0;
     if ((log.steps || 0) >= stepGoal) score++;
     if ((log.water || 0) >= waterGoal) score++;
-    if (log.nutrition === true) score++;
-    if (log.workout === true || weeklyWorkouts >= workoutGoal) score++;
-    return score;
+    if (trackCal && isNutritionGoalMetForDate(dateStr, log)) score++;
+
+    return { score, maxScore, trackCal };
   }
 
-  function getDayScore(log, weeklyWorkouts) {
-    return getDayScoreForDate(getTodayStr(), log, weeklyWorkouts);
+  function getDayScoreForDate(dateStr, log) {
+    return getDayScoreDetails(dateStr, log).score;
+  }
+
+  function getDayScore(log) {
+    return getDayScoreDetails(getTodayStr(), log).score;
+  }
+
+  function setTrackCaloriesMode(enabled) {
+    state.profile.trackCalories = enabled;
+    const todayLog = ensureTodayLog();
+    todayLog.trackCalories = enabled;
+    saveState();
+    renderAll();
   }
 
   function toggleDietBreak() {
@@ -3029,18 +3066,21 @@ appStore.activeUserId = uid;
       waterEl.appendChild(cup);
     }
 
-    document.getElementById('btnNutYes').className = 'yn-btn' + (todayLog.nutrition === true ? ' active-yes' : '');
-    document.getElementById('btnNutNo').className = 'yn-btn' + (todayLog.nutrition === false ? ' active-no' : '');
+    const trackCalToday = isDayTrackCalories(todayLog);
+    const btnCalYes = document.getElementById('btnCountCalYes');
+    const btnCalNo = document.getElementById('btnCountCalNo');
+    if (btnCalYes) btnCalYes.className = 'yn-btn' + (trackCalToday ? ' active-yes' : '');
+    if (btnCalNo) btnCalNo.className = 'yn-btn' + (!trackCalToday ? ' active-no' : '');
 
     document.getElementById('workoutGoalLabel').textContent = p.workoutGoal;
-    document.getElementById('workoutsWeekBadge').textContent = `${weekWorkouts} / ${p.workoutGoal}`;
+    document.getElementById('workoutsWeekBadge').textContent = `${weekWorkouts} / ${p.workoutGoal} (Пн–Вс)`;
     const btnW = document.getElementById('btnWorkoutToday');
     btnW.textContent = todayLog.workout ? '✅ Выполнено сегодня' : '+ Тренировка сегодня';
     btnW.style.background = todayLog.workout ? 'var(--success)' : '';
     btnW.style.color = todayLog.workout ? '#fff' : '';
 
-    const scoreToday = getDayScore(todayLog, weekWorkouts);
-    document.getElementById('todayScoreBadge').textContent = `${scoreToday} / 4 целей`;
+    const dayDetails = getDayScoreDetails(getTodayStr(), todayLog);
+    document.getElementById('todayScoreBadge').textContent = `${dayDetails.score} / ${dayDetails.maxScore} целей`;
 
     document.getElementById('mChest').textContent = latest.chest ? `${latest.chest}` : '—';
     document.getElementById('mWaist').textContent = latest.waist ? `${latest.waist}` : '—';
@@ -4077,14 +4117,25 @@ let searchInputDebounceTimer = null;
       const dStr = String(day).padStart(2, '0');
       const key = `${year}-${mStr}-${dStr}`;
       const log = state.dailyLogs[key];
-      const score = getDayScoreForDate(key, log, weekW);
+      const { score, maxScore } = getDayScoreDetails(key, log);
+      const hasWorkout = !!(log && log.workout);
+
+      let hmLevel = 0;
+      if (score > 0) {
+        if (maxScore === 2) {
+          hmLevel = score === 2 ? 4 : 2;
+        } else {
+          hmLevel = score === 3 ? 4 : (score === 2 ? 3 : 1);
+        }
+      }
 
       const cell = document.createElement('div');
-      cell.className = 'hm-cell' + (score > 0 ? ` hm-${score}` : '');
+      cell.className = 'hm-cell' + (hmLevel > 0 ? ` hm-${hmLevel}` : '');
       if (key === todayStr) cell.style.outline = '2px solid var(--primary-deep)';
       const isStartDay = state.profile.startDate && key === state.profile.startDate;
-      cell.textContent = isStartDay ? `${day}🚩` : day;
-      cell.title = `${dStr}.${mStr}.${year}${isStartDay ? ' (Старт пути)' : ''}: выполнено ${score}/4 целей`;
+      const marks = `${hasWorkout ? '⭐' : ''}${isStartDay ? '🚩' : ''}`;
+      cell.textContent = `${day}${marks}`;
+      cell.title = `${dStr}.${mStr}.${year}${isStartDay ? ' (Старт пути)' : ''}: выполнено ${score}/${maxScore} целей${hasWorkout ? ' • Была тренировка ⭐' : ''}`;
       grid.appendChild(cell);
     }
   }
