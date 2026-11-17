@@ -3807,8 +3807,9 @@ let searchInputDebounceTimer = null;
                   <strong>${it.name}</strong> ${it.portionText ? `(${it.portionText})` : (it.grams ? `(${it.grams} г)` : '')}
                   <div style="font-size:0.68rem; color:var(--muted);">Б ${it.p}г • Ж ${it.f}г • У ${it.c}г</div>
                 </div>
-                <div class="row" style="gap:6px; flex-wrap:nowrap;">
+                <div class="row" style="gap:5px; flex-wrap:nowrap;">
                   <strong style="color:var(--primary); white-space:nowrap;">${it.kcal} ккал</strong>
+                  <button class="btn-soft" style="padding:3px 7px; min-height:26px; font-size:0.7rem;" onclick="openEditLoggedFoodModal(${it.globalIdx})" title="Изменить вес или порцию">✏️</button>
                   <button class="btn-soft" style="padding:3px 7px; min-height:26px; font-size:0.7rem;" onclick="deleteFoodLogEntry(${it.globalIdx})">✕</button>
                 </div>
               </div>
@@ -4519,6 +4520,29 @@ function isDayKcalInNorm(log, targetKcal, goalType) {
  return null;
 }
 
+function calcWeightedDayProgress(dateStr, log, targetKcal, goalType) {
+  const stepGoal = Math.max(1, state.profile.stepGoal || 8000);
+  const waterGoal = Math.max(1, state.profile.waterGoal || 8);
+  const trackCal = isDayTrackCalories(log);
+
+  if (!log) {
+    return trackCal ? 0 : 30;
+  }
+
+  const waterPts = Math.min(1, (log.water || 0) / waterGoal) * 35;
+  const stepsPts = Math.min(1, (log.steps || 0) / stepGoal) * 35;
+
+  let calPts = 0;
+  if (!trackCal) {
+    calPts = 30;
+  } else {
+    const normStatus = isDayKcalInNorm(log, targetKcal, goalType);
+    if (normStatus === true) calPts = 30;
+  }
+
+  return waterPts + stepsPts + calPts;
+}
+
 function renderSummaryDonuts() {
  ['day', 'week', 'month'].forEach(m => {
    const b = document.getElementById('btnPeriod' + m[0].toUpperCase() + m.slice(1));
@@ -4550,6 +4574,7 @@ function renderSummaryDonuts() {
  let nutYesDays = 0;
  let nutAnsweredDays = 0;
  let streak = 0;
+ let weightedPctSum = 0;
  const stripHtml = [];
 
  for (let i = periodDays - 1; i >= 0; i--) {
@@ -4559,6 +4584,8 @@ function renderSummaryDonuts() {
    const log = state.dailyLogs[k];
    const normStatus = isDayKcalInNorm(log, targetK, goalType);
    const sumK = (log?.foods || []).reduce((s, x) => s + (x.kcal || 0), 0);
+
+   weightedPctSum += calcWeightedDayProgress(k, log, targetK, goalType);
 
    if (normStatus === true) {
      inNormDays++;
@@ -4579,11 +4606,11 @@ function renderSummaryDonuts() {
    stripHtml.push(`<div title="${titleInfo}" style="padding:4px 7px; border-radius:8px; font-size:0.7rem; font-weight:800; background:${bg}; color:${col};">${dayNum}</div>`);
  }
 
- const overallPct = Math.round((inNormDays / Math.max(1, periodDays)) * 100);
+ const overallPct = Math.min(100, Math.round(weightedPctSum / Math.max(1, periodDays)));
  const nutPct = nutAnsweredDays ? Math.round((nutYesDays / nutAnsweredDays) * 100) : 0;
  const workPct = Math.min(100, Math.round((weekW / Math.max(1, state.profile.workoutGoal)) * 100));
 
- document.getElementById('overallSuccessBadge').textContent = `${overallPct}% в норме`;
+ document.getElementById('overallSuccessBadge').textContent = `${overallPct}% прогресс`;
  document.getElementById('anTotalDays').textContent = periodDays;
  document.getElementById('anSuccessDays').textContent = inNormDays;
  document.getElementById('anStreakDays').textContent = streak;
@@ -5494,6 +5521,11 @@ list.innerHTML = favs.map((f, i) => `
     item.p = +(editingLoggedFoodBase100.p * r).toFixed(1);
     item.f = +(editingLoggedFoodBase100.f * r).toFixed(1);
     item.c = +(editingLoggedFoodBase100.c * r).toFixed(1);
+
+    const latest = state.history[state.history.length - 1] || { weight: state.profile.startWeight };
+    const stage = getCurrentDynamicPlan(latest.weight, state.profile);
+    const totalKcal = todayLog.foods.reduce((s, x) => s + x.kcal, 0);
+    todayLog.nutrition = totalKcal <= stage.kcal;
 
     saveState();
     closeEditLoggedFoodModal();
