@@ -1770,7 +1770,7 @@
 </div>
 
 <!-- PRODUCT MODAL -->
-<div class="modal-backdrop" id="productModal">
+<div class="modal-backdrop" id="productModal" style="z-index: 75;">
   <div class="modal">
     <div class="card-title">
       <span id="productModalTitle">🥗 Создать продукт (на 100 г)</span>
@@ -3429,6 +3429,10 @@ invalidateProductsCache();
     syncUnitSelectorForProduct(selectedProductObj);
     renderProductSearchResults();
     updatePortionPreview();
+    if (document.getElementById('productPickerModal')?.classList.contains('open')) {
+      syncPpmUnitSelector(selectedProductObj);
+      renderPpmSearchResults();
+    }
 
     try {
       const targetKey = existingFbKey || ('prod_' + Date.now() + '_' + Math.floor(Math.random() * 1000));
@@ -3441,6 +3445,10 @@ invalidateProductsCache();
       });
       if (res.ok) {
         await syncSharedProducts(false);
+        if (document.getElementById('productPickerModal')?.classList.contains('open')) {
+          syncPpmUnitSelector(selectedProductObj);
+          renderPpmSearchResults();
+        }
         showAppAlert('Успешно', `✅ Продукт «${name}» сохранён и перезаписан в облаке!`);
       } else {
         const errText = await res.text();
@@ -3463,6 +3471,10 @@ invalidateProductsCache();
     syncUnitSelectorForProduct(selectedProductObj);
     renderProductSearchResults();
     updatePortionPreview();
+    if (document.getElementById('productPickerModal')?.classList.contains('open')) {
+      syncPpmUnitSelector(selectedProductObj);
+      renderPpmSearchResults();
+    }
 
     try {
       await fetch(`${FIREBASE_DB_URL}/shared_products/${fbKey}.json`, { method: 'DELETE' });
@@ -3608,16 +3620,10 @@ let searchInputDebounceTimer = null;
     const latest = state.history[state.history.length - 1] || { weight: state.profile.startWeight };
     const stage = getCurrentDynamicPlan(latest.weight, state.profile);
     const totalKcal = todayLog.foods.reduce((s, x) => s + x.kcal, 0);
-    if (state.profile.goalType === 'lose') {
-      if (totalKcal >= stage.kcal * 0.70 && totalKcal <= stage.kcal * 1.08) {
-        todayLog.nutrition = true;
-      } else if (totalKcal > stage.kcal * 1.15) {
-        todayLog.nutrition = false;
-      }
+    if (totalKcal <= stage.kcal) {
+      todayLog.nutrition = true;
     } else {
-      if (totalKcal >= stage.kcal * 0.90) {
-        todayLog.nutrition = true;
-      }
+      todayLog.nutrition = false;
     }
     saveState();
     renderAll();
@@ -4455,8 +4461,7 @@ function isDayKcalInNorm(log, targetKcal, goalType) {
  const foods = log.foods || [];
  if (foods.length > 0) {
    const sumK = foods.reduce((s, x) => s + (x.kcal || 0), 0);
-   if (goalType === 'gain') return sumK >= targetKcal * 0.90 && sumK <= targetKcal * 1.25;
-   return sumK >= targetKcal * 0.70 && sumK <= targetKcal * 1.10;
+   return sumK <= targetKcal;
  }
  if (log.nutrition === true) return true;
  if (log.nutrition === false) return false;
