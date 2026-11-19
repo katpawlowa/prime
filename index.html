@@ -1086,7 +1086,7 @@
         <span>📏 Мои замеры (см)</span>
         <button class="btn-soft" onclick="openReportModal()">Обновить</button>
       </div>
-      <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:0;">
+      <div class="stats-grid" id="measurementsGrid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:0;">
         <div class="stat-box">
           <div class="stat-label">Грудь</div>
           <div class="stat-val" id="mChest">—</div>
@@ -1101,6 +1101,11 @@
           <div class="stat-label">Бедра</div>
           <div class="stat-val" id="mHips">—</div>
           <div class="stat-sub" id="mHipsDiff">Старт</div>
+        </div>
+        <div class="stat-box" id="mArmBox" style="display:none;">
+          <div class="stat-label">Рука (бицепс)</div>
+          <div class="stat-val" id="mArm">—</div>
+          <div class="stat-sub" id="mArmDiff">Старт</div>
         </div>
       </div>
     </div>
@@ -1143,11 +1148,11 @@
       </div>
       <div class="kg-bubbles" id="kgBubbles"></div>
     </div>
-    <!-- Overall Donut with Period Switcher -->
-    <div class="card">
+    <!-- BJU Donut Card (Visible ONLY when calorie tracking is active) -->
+    <div class="card" id="bjuDonutCard">
       <div class="card-title">
-        <span>🏆 Прогресс и норма калорий</span>
-        <span class="badge" id="overallSuccessBadge">0% успеха</span>
+        <span>🥗 Баланс БЖУ и норма калорий</span>
+        <span class="badge" id="overallSuccessBadge">0 ккал</span>
       </div>
       <div class="row" style="margin-bottom:10px; gap:6px;">
         <button class="btn-soft" id="btnPeriodDay" style="flex:1;" onclick="setAnalyticsPeriod('day')">За день</button>
@@ -1157,16 +1162,19 @@
       <canvas id="overallDonutChart"></canvas>
       <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin-top:10px; margin-bottom:10px;">
         <div class="stat-box">
-          <div class="stat-label" id="anTotalLabel">Всего дней</div>
-          <div class="stat-val" id="anTotalDays">1</div>
+          <div class="stat-label" style="color:#3b82f6; font-weight:800;">● Белки</div>
+          <div class="stat-val" style="font-size:1.05rem; color:#3b82f6;" id="anProteinStat">0 г</div>
+          <div class="stat-sub" id="anProteinPct">0% от КБЖУ</div>
         </div>
         <div class="stat-box">
-          <div class="stat-label">В норме КБЖУ</div>
-          <div class="stat-val" style="color:var(--success);" id="anSuccessDays">0</div>
+          <div class="stat-label" style="color:#f59e0b; font-weight:800;">● Жиры</div>
+          <div class="stat-val" style="font-size:1.05rem; color:#f59e0b;" id="anFatStat">0 г</div>
+          <div class="stat-sub" id="anFatPct">0% от КБЖУ</div>
         </div>
         <div class="stat-box">
-          <div class="stat-label">Подряд в норме</div>
-          <div class="stat-val" id="anStreakDays">0</div>
+          <div class="stat-label" style="color:#10b981; font-weight:800;">● Углеводы</div>
+          <div class="stat-val" style="font-size:1.05rem; color:#10b981;" id="anCarbStat">0 г</div>
+          <div class="stat-sub" id="anCarbPct">0% от КБЖУ</div>
         </div>
       </div>
       <div style="font-size:0.76rem; font-weight:800; color:var(--primary-deep); margin-bottom:6px;">🔥 Соблюдение нормы калорий по дням:</div>
@@ -1221,15 +1229,11 @@
       <canvas id="waterChart"></canvas>
     </div>
 
-    <div class="summary-rings" style="margin-bottom:12px;">
-      <div class="ring-card">
-        <div style="font-size:0.78rem; font-weight:800; color:var(--primary-deep); margin-bottom:4px;">🥗 Питание («Да»)</div>
-        <canvas id="nutritionDonutChart"></canvas>
+    <div class="card" style="text-align:center;">
+      <div class="card-title" style="justify-content:center;">
+        <span>💪 Тренировки за текущую неделю (Пн–Вс)</span>
       </div>
-      <div class="ring-card">
-        <div style="font-size:0.78rem; font-weight:800; color:var(--primary-deep); margin-bottom:4px;">💪 Тренировки</div>
-        <canvas id="workoutDonutChart"></canvas>
-      </div>
+      <canvas id="workoutDonutChart" style="height:130px !important;"></canvas>
     </div>
 
     <!-- Photo Progress Diary ("До / После") -->
@@ -1854,6 +1858,10 @@
       <div class="field" style="flex:1;">
         <label>Бедра (см):</label>
         <input type="number" step="0.5" id="repHips" />
+      </div>
+      <div class="field" style="flex:1;" id="repArmField">
+        <label>Рука (см):</label>
+        <input type="number" step="0.5" id="repArm" />
       </div>
     </div>
     <button class="btn" style="width:100%; margin-top:8px;" onclick="saveReport()">Сохранить отчет</button>
@@ -3092,10 +3100,27 @@ appStore.activeUserId = uid;
     if (start.waist && latest.waist) {
       const d = +(latest.waist - start.waist).toFixed(1);
       document.getElementById('mWaistDiff').textContent = d === 0 ? 'Старт' : `${d > 0 ? '+' : ''}${d} см`;
-    }
-    if (start.hips && latest.hips) {
+    }if (start.hips && latest.hips) {
       const d = +(latest.hips - start.hips).toFixed(1);
       document.getElementById('mHipsDiff').textContent = d === 0 ? 'Старт' : `${d > 0 ? '+' : ''}${d} см`;
+    }
+
+    const isMale = p.gender === 'male';
+    const mGrid = document.getElementById('measurementsGrid');
+    const armBox = document.getElementById('mArmBox');
+    if (mGrid && armBox) {
+      mGrid.style.gridTemplateColumns = isMale ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)';
+      armBox.style.display = isMale ? 'block' : 'none';
+      if (isMale) {
+        document.getElementById('mArm').textContent = latest.arm ? `${latest.arm}` : '—';
+        const firstArm = state.history.find(h => h.arm)?.arm;
+        if (firstArm && latest.arm) {
+          const d = +(latest.arm - firstArm).toFixed(1);
+          document.getElementById('mArmDiff').textContent = d === 0 ? 'Старт' : `${d > 0 ? '+' : ''}${d} см`;
+        } else {
+          document.getElementById('mArmDiff').textContent = 'Старт';
+        }
+      }
     }
 
     document.getElementById('profName').value = p.name;
@@ -4520,107 +4545,156 @@ function isDayKcalInNorm(log, targetKcal, goalType) {
  return null;
 }
 
-function calcWeightedDayProgress(dateStr, log, targetKcal, goalType) {
-  const stepGoal = Math.max(1, state.profile.stepGoal || 8000);
-  const waterGoal = Math.max(1, state.profile.waterGoal || 8);
-  const trackCal = isDayTrackCalories(log);
+function drawBjuDonut(canvasId, pGrams, fGrams, cGrams, totalKcal) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+  const dpr = window.devicePixelRatio || 1;
+  const hPx = 185;
+  canvas.width = rect.width * dpr;
+  canvas.height = hPx * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const w = rect.width;
+  ctx.clearRect(0, 0, w, hPx);
 
-  if (!log) {
-    return trackCal ? 0 : 30;
-  }
+  const cx = w / 2;
+  const cy = hPx / 2;
+  const radius = Math.min(cx, cy) - 14;
+  const lineW = 19;
 
-  const waterPts = Math.min(1, (log.water || 0) / waterGoal) * 35;
-  const stepsPts = Math.min(1, (log.steps || 0) / stepGoal) * 35;
+  const pKcal = pGrams * 4;
+  const fKcal = fGrams * 9;
+  const cKcal = cGrams * 4;
+  const macroKcalSum = pKcal + fKcal + cKcal;
 
-  let calPts = 0;
-  if (!trackCal) {
-    calPts = 30;
+  if (macroKcalSum <= 0) {
+    ctx.strokeStyle = getCssVar('--surface-2');
+    ctx.lineWidth = lineW;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
   } else {
-    const normStatus = isDayKcalInNorm(log, targetKcal, goalType);
-    if (normStatus === true) calPts = 30;
+    const segments = [
+      { val: pKcal, color: '#3b82f6' }, // Белки (синий)
+      { val: fKcal, color: '#f59e0b' }, // Жиры (янтарный)
+      { val: cKcal, color: '#10b981' }  // Углеводы (зелёный)
+    ];
+    let startAngle = -Math.PI / 2;
+    segments.forEach(seg => {
+      if (seg.val <= 0) return;
+      const sliceAngle = (seg.val / macroKcalSum) * Math.PI * 2;
+      ctx.strokeStyle = seg.color;
+      ctx.lineWidth = lineW;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle);
+      ctx.stroke();
+      startAngle += sliceAngle;
+    });
   }
 
-  return waterPts + stepsPts + calPts;
+  ctx.fillStyle = getCssVar('--text');
+  ctx.font = '800 18px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${Math.round(totalKcal)} ккал`, cx, cy);
 }
 
 function renderSummaryDonuts() {
- ['day', 'week', 'month'].forEach(m => {
-   const b = document.getElementById('btnPeriod' + m[0].toUpperCase() + m.slice(1));
-   if (b) {
-     b.style.background = analyticsPeriodMode === m ? 'var(--primary)' : '';
-     b.style.color = analyticsPeriodMode === m ? '#fff' : '';
-   }
- });
+  const weekW = getWeeklyWorkoutsCount();
+  const workPct = Math.min(100, Math.round((weekW / Math.max(1, state.profile.workoutGoal)) * 100));
+  drawDonut('workoutDonutChart', workPct, `${weekW}/${state.profile.workoutGoal}`);
 
- const latest = state.history[state.history.length - 1] || { weight: state.profile.startWeight };
- const stagePlan = getCurrentDynamicPlan(latest.weight, state.profile);
- const targetK = stagePlan.kcal;
- const goalType = state.profile.goalType || 'lose';
+  const bjuCard = document.getElementById('bjuDonutCard');
+  const todayLog = ensureTodayLog();
+  const isTracking = isDayTrackCalories(todayLog);
+  if (bjuCard) {
+    bjuCard.style.display = isTracking ? 'block' : 'none';
+  }
+  if (!isTracking) return;
 
- const todayDt = new Date(getTodayStr() + 'T12:00:00');
- const startDateStr = state.profile.startDate || (state.history[0]?.date || getTodayStr());
- const profileStartDt = new Date(startDateStr + 'T12:00:00');
+  ['day', 'week', 'month'].forEach(m => {
+    const b = document.getElementById('btnPeriod' + m[0].toUpperCase() + m.slice(1));
+    if (b) {
+      b.style.background = analyticsPeriodMode === m ? 'var(--primary)' : '';
+      b.style.color = analyticsPeriodMode === m ? '#fff' : '';
+    }
+  });
 
- let periodDays = 30;
- if (analyticsPeriodMode === 'day') periodDays = 1;
- else if (analyticsPeriodMode === 'week') periodDays = 7;
- else {
-   const diffFromStart = Math.max(1, Math.round((todayDt - profileStartDt) / 86400000) + 1);
-   periodDays = Math.min(30, diffFromStart);
- }
+  const latest = state.history[state.history.length - 1] || { weight: state.profile.startWeight };
+  const stagePlan = getCurrentDynamicPlan(latest.weight, state.profile);
+  const targetK = stagePlan.kcal;
+  const goalType = state.profile.goalType || 'lose';
 
- const weekW = getWeeklyWorkoutsCount();
- let inNormDays = 0;
- let nutYesDays = 0;
- let nutAnsweredDays = 0;
- let streak = 0;
- let weightedPctSum = 0;
- const stripHtml = [];
+  const todayDt = new Date(getTodayStr() + 'T12:00:00');
+  const startDateStr = state.profile.startDate || (state.history[0]?.date || getTodayStr());
+  const profileStartDt = new Date(startDateStr + 'T12:00:00');
 
- for (let i = periodDays - 1; i >= 0; i--) {
-   const d = new Date(todayDt);
-   d.setDate(todayDt.getDate() - i);
-   const k = formatLocalDate(d);
-   const log = state.dailyLogs[k];
-   const normStatus = isDayKcalInNorm(log, targetK, goalType);
-   const sumK = (log?.foods || []).reduce((s, x) => s + (x.kcal || 0), 0);
+  let periodDays = 30;
+  if (analyticsPeriodMode === 'day') periodDays = 1;
+  else if (analyticsPeriodMode === 'week') periodDays = 7;
+  else {
+    const diffFromStart = Math.max(1, Math.round((todayDt - profileStartDt) / 86400000) + 1);
+    periodDays = Math.min(30, diffFromStart);
+  }
 
-   weightedPctSum += calcWeightedDayProgress(k, log, targetK, goalType);
+  let sumP = 0, sumF = 0, sumC = 0, sumKcalTotal = 0;
+  let loggedDaysCount = 0;
+  const stripHtml = [];
 
-   if (normStatus === true) {
-     inNormDays++;
-     streak++;
-   } else {
-     streak = 0;
-   }
+  for (let i = periodDays - 1; i >= 0; i--) {
+    const d = new Date(todayDt);
+    d.setDate(todayDt.getDate() - i);
+    const k = formatLocalDate(d);
+    const log = state.dailyLogs[k];
+    const normStatus = isDayKcalInNorm(log, targetK, goalType);
+    const foods = log?.foods || [];
+    const dayK = foods.reduce((s, x) => s + (x.kcal || 0), 0);
 
-   if (normStatus !== null) {
-     nutAnsweredDays++;
-     if (normStatus === true) nutYesDays++;
-   }
+    if (foods.length > 0) {
+      loggedDaysCount++;
+      sumKcalTotal += dayK;
+      foods.forEach(item => {
+        sumP += item.p || 0;
+        sumF += item.f || 0;
+        sumC += item.c || 0;
+      });
+    }
 
-   const dayNum = String(d.getDate()).padStart(2, '0');
-   const bg = normStatus === true ? 'var(--success)' : (normStatus === false ? 'var(--danger)' : 'var(--surface-2)');
-   const col = normStatus !== null ? '#fff' : 'var(--muted)';
-   const titleInfo = sumK > 0 ? `${k}: ${sumK} / ${targetK} ккал` : `${k}: ${normStatus === true ? 'В норме' : (normStatus === false ? 'Не в норме' : 'Нет данных')}`;
-   stripHtml.push(`<div title="${titleInfo}" style="padding:4px 7px; border-radius:8px; font-size:0.7rem; font-weight:800; background:${bg}; color:${col};">${dayNum}</div>`);
- }
+    const dayNum = String(d.getDate()).padStart(2, '0');
+    const bg = normStatus === true ? 'var(--success)' : (normStatus === false ? 'var(--danger)' : 'var(--surface-2)');
+    const col = normStatus !== null ? '#fff' : 'var(--muted)';
+    const titleInfo = dayK > 0 ? `${k}: ${dayK} / ${targetK} ккал` : `${k}: ${normStatus === true ? 'В норме' : (normStatus === false ? 'Не в норме' : 'Нет данных')}`;
+    stripHtml.push(`<div title="${titleInfo}" style="padding:4px 7px; border-radius:8px; font-size:0.7rem; font-weight:800; background:${bg}; color:${col};">${dayNum}</div>`);
+  }
 
- const overallPct = Math.min(100, Math.round(weightedPctSum / Math.max(1, periodDays)));
- const nutPct = nutAnsweredDays ? Math.round((nutYesDays / nutAnsweredDays) * 100) : 0;
- const workPct = Math.min(100, Math.round((weekW / Math.max(1, state.profile.workoutGoal)) * 100));
+  const divDays = analyticsPeriodMode === 'day' ? 1 : Math.max(1, loggedDaysCount);
+  const avgP = Math.round(sumP / divDays);
+  const avgF = Math.round(sumF / divDays);
+  const avgC = Math.round(sumC / divDays);
+  const avgKcal = Math.round(sumKcalTotal / divDays);
 
- document.getElementById('overallSuccessBadge').textContent = `${overallPct}% прогресс`;
- document.getElementById('anTotalDays').textContent = periodDays;
- document.getElementById('anSuccessDays').textContent = inNormDays;
- document.getElementById('anStreakDays').textContent = streak;
+  const macroKcal = avgP * 4 + avgF * 9 + avgC * 4;
+  const pPct = macroKcal > 0 ? Math.round((avgP * 4 / macroKcal) * 100) : 0;
+  const fPct = macroKcal > 0 ? Math.round((avgF * 9 / macroKcal) * 100) : 0;
+  const cPct = macroKcal > 0 ? Math.max(0, 100 - pPct - fPct) : 0;
 
- const stripEl = document.getElementById('kcalComplianceStrip');
- if (stripEl) stripEl.innerHTML = stripHtml.join('');
+  const badgeEl = document.getElementById('overallSuccessBadge');
+  if (badgeEl) badgeEl.textContent = analyticsPeriodMode === 'day' ? `${avgKcal} / ${targetK} ккал` : `~${avgKcal} ккал/день`;
 
- drawDonut('overallDonutChart', overallPct, `${overallPct}%`);
- drawDonut('nutritionDonutChart', nutPct, `${nutPct}%`);
- drawDonut('workoutDonutChart', workPct, `${weekW}/${state.profile.workoutGoal}`);
+  document.getElementById('anProteinStat').textContent = `${avgP} г`;
+  document.getElementById('anProteinPct').textContent = `${pPct}% калорий`;
+  document.getElementById('anFatStat').textContent = `${avgF} г`;
+  document.getElementById('anFatPct').textContent = `${fPct}% калорий`;
+  document.getElementById('anCarbStat').textContent = `${avgC} г`;
+  document.getElementById('anCarbPct').textContent = `${cPct}% калорий`;
+
+  const stripEl = document.getElementById('kcalComplianceStrip');
+  if (stripEl) stripEl.innerHTML = stripHtml.join('');
+
+  drawBjuDonut('overallDonutChart', avgP, avgF, avgC, avgKcal);
 }
 
   function switchTab(tabId, btn) {
@@ -4633,13 +4707,16 @@ function renderSummaryDonuts() {
     }
   }
 
-  function openReportModal() {
+ function openReportModal() {
     const latest = state.history[state.history.length - 1] || { weight: state.profile.startWeight };
     document.getElementById('repDate').value = getTodayStr();
     document.getElementById('repWeight').value = latest.weight;
     document.getElementById('repChest').value = latest.chest || '';
     document.getElementById('repWaist').value = latest.waist || '';
     document.getElementById('repHips').value = latest.hips || '';
+    const armField = document.getElementById('repArmField');
+    if (armField) armField.style.display = state.profile.gender === 'male' ? 'block' : 'none';
+    document.getElementById('repArm').value = latest.arm || '';
     document.getElementById('reportModal').classList.add('open');
   }
   function closeReportModal() { document.getElementById('reportModal').classList.remove('open'); }
@@ -4650,11 +4727,12 @@ function renderSummaryDonuts() {
     const chest = parseFloat(document.getElementById('repChest').value) || null;
     const waist = parseFloat(document.getElementById('repWaist').value) || null;
     const hips = parseFloat(document.getElementById('repHips').value) || null;
+    const arm = parseFloat(document.getElementById('repArm').value) || null;
     if (!weight || weight < 35 || weight > 250) {
       showAppAlert('Ошибка', 'Введите корректный вес!');
       return;
     }
-    state.history.push({ date, weight, chest, waist, hips });
+    state.history.push({ date, weight, chest, waist, hips, arm });
     saveState();
     closeReportModal();
     renderAll();
