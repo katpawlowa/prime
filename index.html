@@ -1200,7 +1200,7 @@
       <div class="heatmap-grid" id="heatmapGrid"></div>
     </div>
 
-    <!-- Weight Chart with Moving Average -->
+    <!-- Weight Chart with Moving Average & History -->
     <div class="card">
       <div class="card-title">
         <span>📉 Вес: Факт vs Скользящее среднее</span>
@@ -1210,6 +1210,23 @@
         Плавная линия сглаживает скачки воды и показывает реальный прогресс.
       </p>
       <canvas id="weightChart"></canvas>
+      <div style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--border);">
+        <div onclick="toggleWeightHistoryList()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-size:0.78rem; font-weight:800; color:var(--primary-deep);">
+          <span>📋 История взвешиваний и замеров (<span id="weightHistoryCount">0</span>)</span>
+          <span class="badge" id="weightHistoryToggleBadge">▼ Показать</span>
+        </div>
+        <div id="weightHistoryList" style="display:none; margin-top:8px; max-height:220px; overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- Measurements Chart -->
+    <div class="card">
+      <div class="card-title">
+        <span>📏 Динамика замеров (см)</span>
+        <span class="badge" id="measurementsChartBadge">Объемы тела</span>
+      </div>
+      <div class="row" style="gap:10px; font-size:0.72rem; font-weight:800; margin-bottom:6px;" id="measurementsLegend"></div>
+      <canvas id="measurementsChart"></canvas>
     </div>
 
     <!-- Steps & Water Bar Charts -->
@@ -1488,6 +1505,29 @@
         </div>
       </div>
       <button class="btn" style="width:100%;" onclick="saveProfileSettings()">Сохранить и пересчитать</button>
+    </div>
+
+<!-- Cloud Backup & Restore in Firebase -->
+    <div class="card">
+      <div class="card-title">
+        <span>☁️ Облачное сохранение прогресса</span>
+        <span class="badge" id="cloudProfileKeyBadge">Ключ: —</span>
+      </div>
+      <p style="font-size:0.75rem; color:var(--muted); margin-bottom:8px;">
+        Сохраняй весь свой прогресс (вес, замеры, дневник питания, рецепты и настройки) в облако по личному ключу, чтобы легко восстановить его на другом устройстве или после очистки браузера.
+      </p>
+      <div style="background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:9px 12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span style="font-size:0.8rem; font-weight:700; color:var(--muted);">Твой ключ: <strong id="cloudSyncKeyText" style="color:var(--primary-deep); font-size:0.9rem;">—</strong></span>
+        <button type="button" class="btn-soft" style="padding:4px 9px; min-height:28px; font-size:0.72rem;" onclick="copyCloudSyncKey()">📋 Копировать</button>
+      </div>
+      <button type="button" class="btn" style="width:100%; margin-bottom:8px;" onclick="backupUserToCloud(true)">☁️ Выгрузить текущий прогресс в облако</button>
+      <div style="border-top:1px dashed var(--border); padding-top:8px; margin-top:4px;">
+        <label style="display:block; font-size:0.74rem; font-weight:700; color:var(--muted); margin-bottom:4px;">Восстановить профиль по ключу (своему или с другого телефона):</label>
+        <div class="row" style="gap:6px;">
+          <input type="text" id="restoreCloudKeyInput" placeholder="Введи ключ (напр: PRIME-123456)" style="flex:2; text-transform:uppercase;" />
+          <button type="button" class="btn-soft" style="flex:1;" onclick="restoreUserFromCloud()">📥 Загрузить</button>
+        </div>
+      </div>
     </div>
 
     <!-- Feedback Card with Google Sheets integration -->
@@ -3142,6 +3182,12 @@ appStore.activeUserId = uid;
     document.getElementById('profWorkoutGoal').value = p.workoutGoal;
     document.getElementById('profileBmiBadge').textContent = `ИМТ: ${bmiObj.bmi} (${bmiObj.cat})`;
 
+const userCloudKey = ensureUserCloudKey();
+    const keyBadge = document.getElementById('cloudProfileKeyBadge');
+    const keyText = document.getElementById('cloudSyncKeyText');
+    if (keyBadge) keyBadge.textContent = state.lastCloudBackup ? `✓ ${state.lastCloudBackup}` : 'Не выгружен';
+    if (keyText) keyText.textContent = userCloudKey;
+
     renderCalorieTracker(currentStage);
     renderWorkoutPresetDetails();
     renderSavings();
@@ -3868,6 +3914,115 @@ let searchInputDebounceTimer = null;
     renderFavPortions();
   }
 
+function ensureUserCloudKey() {
+    if (!state.cloudSyncKey) {
+      const randNum = Math.floor(100000 + Math.random() * 900000);
+      state.cloudSyncKey = `PRIME-${randNum}`;
+      saveState();
+    }
+    return state.cloudSyncKey;
+  }
+
+  function copyCloudSyncKey() {
+    const key = ensureUserCloudKey();
+    if (navigator.clipboard) navigator.clipboard.writeText(key).catch(() => {});
+    showAppAlert('Ключ скопирован', `Твой личный ключ облачного сохранения: ${key}\n\nСохрани его в заметках — по нему можно восстановить весь прогресс на любом телефоне.`);
+  }
+
+  async function backupUserToCloud(showSuccessAlert = true) {
+    const key = ensureUserCloudKey();
+    const cleanBackup = {
+      theme: state.theme,
+      dietBreakActive: state.dietBreakActive,
+      cyclePhase: state.cyclePhase,
+      profile: state.profile,
+      history: state.history || [],
+      dailyLogs: state.dailyLogs || {},
+      savingsLogs: state.savingsLogs || [],
+      favoriteIds: state.favoriteIds || [],
+      favoritePortions: state.favoritePortions || [],
+      customRecipes: state.customRecipes || { breakfast: [], lunch: [], dinner: [], treat20: [] },
+      rewards: state.rewards || [],
+      openedAdvent: state.openedAdvent || [],
+      currentMenu: state.currentMenu || [],
+      checkedShopping: state.checkedShopping || {},
+      cloudSyncKey: key,
+      savedAt: new Date().toLocaleString('ru-RU')
+    };
+
+    try {
+      const res = await fetch(`${FIREBASE_DB_URL}/user_backups/${encodeURIComponent(key)}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanBackup)
+      });
+      if (res.ok) {
+        state.lastCloudBackup = getTodayStr();
+        saveState();
+        renderAll();
+        if (showSuccessAlert) {
+          showAppAlert('Прогресс в облаке ☁️', `Все данные успешно выгружены!\n\nТвой ключ для восстановления: ${key}`);
+        }
+      } else {
+        const errText = await res.text();
+        if (showSuccessAlert) {
+          showAppAlert('Ошибка Firebase (' + res.status + ')', 'Проверь права записи для ветки user_backups в Rules Firebase! Ответ: ' + errText);
+        }
+      }
+    } catch (e) {
+      if (showSuccessAlert) {
+        showAppAlert('Ошибка сети', 'Не удалось подключиться к облаку. Проверь интернет.');
+      }
+    }
+  }
+
+  async function restoreUserFromCloud() {
+    const rawKey = (document.getElementById('restoreCloudKeyInput')?.value || '').trim().toUpperCase();
+    if (!rawKey) {
+      showAppAlert('Внимание', 'Введи ключ восстановления (например: PRIME-123456)!');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${FIREBASE_DB_URL}/user_backups/${encodeURIComponent(rawKey)}.json`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data || !data.profile) {
+        showAppAlert('Не найдено', `По ключу «${rawKey}» в облаке нет сохранённого профиля.`);
+        return;
+      }
+
+      const reqPin = (data.profile.pin || '').trim();
+      if (reqPin) {
+        const entered = prompt(`🔒 Профиль «${data.profile.name}» защищён PIN-кодом. Введите 4 цифры:`);
+        if (entered !== reqPin) {
+          showAppAlert('Ошибка доступа', '❌ Неверный PIN-код!');
+          return;
+        }
+      }
+
+      if (!confirm(`Загрузить профиль «${data.profile.name}» (сохранён: ${data.savedAt || 'ранее'})? Текущие несохранённые данные этого аккаунта будут заменены.`)) {
+        return;
+      }
+
+      const preservedPhotos = state.photos || [];
+      state = {
+        ...getDefaultUserState(),
+        ...data,
+        onboarded: true,
+        cloudSyncKey: rawKey,
+        photos: preservedPhotos,
+        sharedProducts: appStore.sharedProducts || []
+      };
+      saveState();
+      document.getElementById('restoreCloudKeyInput').value = '';
+      renderAll();
+      showAppAlert('Восстановлено ✅', `Профиль «${state.profile.name}» и вся история успешно загружены из облака!`);
+    } catch (e) {
+      showAppAlert('Ошибка', 'Не удалось загрузить данные из облака: ' + e.message);
+    }
+  }
+
   async function downloadBackupFile() {
     const copyForBackup = { ...state, photos: [] };
     const jsonStr = JSON.stringify(copyForBackup, null, 2);
@@ -4331,9 +4486,173 @@ let searchInputDebounceTimer = null;
 
   function renderAllCharts() {
     renderWeightChart();
+    renderWeightHistoryList();
+    renderMeasurementsChart();
     renderLast7DaysBarChart('stepsChart', 'steps', state.profile.stepGoal, 'avgStepsBadge', 'шагов');
     renderLast7DaysBarChart('waterChart', 'water', state.profile.waterGoal, 'avgWaterBadge', 'ст.');
     renderSummaryDonuts();
+  }
+
+let isWeightHistoryOpen = false;
+
+  function toggleWeightHistoryList() {
+    isWeightHistoryOpen = !isWeightHistoryOpen;
+    const list = document.getElementById('weightHistoryList');
+    const badge = document.getElementById('weightHistoryToggleBadge');
+    if (list) list.style.display = isWeightHistoryOpen ? 'block' : 'none';
+    if (badge) badge.textContent = isWeightHistoryOpen ? '▲ Свернуть' : '▼ Показать';
+  }
+
+  function deleteWeightHistoryEntry(idx) {
+    if (!state.history || state.history.length <= 1) {
+      showAppAlert('Нельзя удалить', 'Должна остаться хотя бы одна стартовая запись веса.');
+      return;
+    }
+    const entry = state.history[idx];
+    if (!confirm(`Удалить запись от ${entry.date} (${entry.weight} кг)?`)) return;
+
+    state.history.splice(idx, 1);
+    if (idx === 0 && state.history.length > 0) {
+      state.profile.startWeight = state.history[0].weight;
+      state.profile.startDate = state.history[0].date;
+    }
+    saveState();
+    renderAll();
+    renderAllCharts();
+  }
+
+  function renderWeightHistoryList() {
+    const listEl = document.getElementById('weightHistoryList');
+    const cntEl = document.getElementById('weightHistoryCount');
+    if (!listEl) return;
+    const hist = state.history || [];
+    if (cntEl) cntEl.textContent = hist.length;
+
+    listEl.innerHTML = hist.map((item, idx) => ({ ...item, idx })).reverse().map(item => {
+      const mParts = [];
+      if (item.chest) mParts.push(`Г: ${item.chest}`);
+      if (item.waist) mParts.push(`Т: ${item.waist}`);
+      if (item.hips) mParts.push(`Б: ${item.hips}`);
+      if (item.arm && state.profile.gender === 'male') mParts.push(`Р: ${item.arm}`);
+      const mStr = mParts.length ? ` • ${mParts.join(' / ')} см` : '';
+      const delBtn = hist.length > 1
+        ? `<button type="button" class="btn-soft" style="padding:3px 7px; min-height:26px; font-size:0.7rem;" onclick="deleteWeightHistoryEntry(${item.idx})" title="Удалить ошибочную запись">✕</button>`
+        : `<span style="font-size:0.68rem; color:var(--muted);">Старт</span>`;
+
+      return `
+        <div class="food-log-item" style="margin-top:4px; padding:7px 9px;">
+          <div>
+            <strong>${item.date}</strong> — <strong style="color:var(--primary);">${item.weight.toFixed(1)} кг</strong>
+            <span style="font-size:0.72rem; color:var(--muted);">${mStr}</span>
+          </div>
+          ${delBtn}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderMeasurementsChart() {
+    const canvas = document.getElementById('measurementsChart');
+    const legendEl = document.getElementById('measurementsLegend');
+    const badgeEl = document.getElementById('measurementsChartBadge');
+    if (!canvas) return;
+
+    const isMale = state.profile.gender === 'male';
+    const series = [
+      { key: 'chest', label: 'Грудь', color: '#3b82f6' },
+      { key: 'waist', label: 'Талия', color: '#ec4899' },
+      { key: 'hips', label: 'Бедра', color: '#10b981' }
+    ];
+    if (isMale) {
+      series.push({ key: 'arm', label: 'Рука', color: '#f59e0b' });
+    }
+
+    if (legendEl) {
+      legendEl.innerHTML = series.map(s => `<span style="color:${s.color};">● ${s.label}</span>`).join('');
+    }
+
+    const pts = (state.history || []).filter(h => h.chest || h.waist || h.hips || (isMale && h.arm));
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = 185 * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const w = rect.width;
+    const h = 185;
+    ctx.clearRect(0, 0, w, h);
+
+    if (pts.length === 0) {
+      if (badgeEl) badgeEl.textContent = 'Нет замеров';
+      ctx.fillStyle = getCssVar('--muted');
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Обнови замеры на главной странице, чтобы увидеть график', w / 2, h / 2);
+      return;
+    }
+
+    if (badgeEl) badgeEl.textContent = `${pts.length} зам.`;
+    const allVals = [];
+    pts.forEach(p => {
+      series.forEach(s => { if (p[s.key]) allVals.push(p[s.key]); });
+    });
+
+    const minY = Math.floor(Math.min(...allVals) - 3);
+    const maxY = Math.ceil(Math.max(...allVals) + 3);
+    const spanY = Math.max(5, maxY - minY);
+
+    const pad = { top: 16, right: 16, bottom: 24, left: 34 };
+    const plotW = w - pad.left - pad.right;
+    const plotH = h - pad.top - pad.bottom;
+
+    ctx.strokeStyle = getCssVar('--chart-grid');
+    ctx.lineWidth = 1;
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = getCssVar('--muted');
+    for (let step = 0; step <= 4; step++) {
+      const val = minY + (spanY * step) / 4;
+      const y = pad.top + plotH - ((val - minY) / spanY) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+      ctx.fillText(Math.round(val), 4, y + 3);
+    }
+
+    series.forEach(s => {
+      const validPts = pts.map((p, i) => ({ val: p[s.key], idx: i, date: p.date })).filter(x => x.val);
+      if (validPts.length === 0) return;
+
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      validPts.forEach((vp, j) => {
+        const x = pad.left + (pts.length === 1 ? plotW / 2 : (vp.idx / (pts.length - 1)) * plotW);
+        const y = pad.top + plotH - ((vp.val - minY) / spanY) * plotH;
+        if (j === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      validPts.forEach(vp => {
+        const x = pad.left + (pts.length === 1 ? plotW / 2 : (vp.idx / (pts.length - 1)) * plotW);
+        const y = pad.top + plotH - ((vp.val - minY) / spanY) * plotH;
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    });
+
+    ctx.fillStyle = getCssVar('--muted');
+    ctx.textAlign = 'center';
+    pts.forEach((p, idx) => {
+      if (pts.length <= 6 || idx === 0 || idx === pts.length - 1 || idx % Math.ceil(pts.length / 5) === 0) {
+        const x = pad.left + (pts.length === 1 ? plotW / 2 : (idx / (pts.length - 1)) * plotW);
+        ctx.fillText(p.date.slice(5), x, h - 7);
+      }
+    });
   }
 
   function renderWeightChart() {
